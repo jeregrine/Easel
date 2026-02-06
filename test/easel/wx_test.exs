@@ -86,6 +86,21 @@ defmodule Easel.WXTest do
       assert Easel.WX.parse_color("#Ff0000") == {255, 0, 0, 255}
     end
 
+    test "parses hsl()" do
+      assert Easel.WX.parse_color("hsl(0, 100%, 50%)") == {255, 0, 0, 255}
+      assert Easel.WX.parse_color("hsl(120, 100%, 50%)") == {0, 255, 0, 255}
+      assert Easel.WX.parse_color("hsl(240, 100%, 50%)") == {0, 0, 255, 255}
+      assert Easel.WX.parse_color("hsl(0, 0%, 50%)") == {128, 128, 128, 255}
+      assert Easel.WX.parse_color("hsl(0, 0%, 0%)") == {0, 0, 0, 255}
+      assert Easel.WX.parse_color("hsl(0, 0%, 100%)") == {255, 255, 255, 255}
+    end
+
+    test "parses hsla()" do
+      assert Easel.WX.parse_color("hsla(0, 100%, 50%, 1.0)") == {255, 0, 0, 255}
+      assert Easel.WX.parse_color("hsla(0, 100%, 50%, 0.5)") == {255, 0, 0, 128}
+      assert Easel.WX.parse_color("hsla(120, 100%, 50%, 0.0)") == {0, 255, 0, 0}
+    end
+
     test "defaults to black for unknown values" do
       assert Easel.WX.parse_color("not-a-color") == {0, 0, 0, 255}
       assert Easel.WX.parse_color("") == {0, 0, 0, 255}

@@ -101,6 +101,12 @@ defmodule Easel.WX do
       String.starts_with?(value, "rgb(") ->
         parse_rgb(value)
 
+      String.starts_with?(value, "hsla(") ->
+        parse_hsla(value)
+
+      String.starts_with?(value, "hsl(") ->
+        parse_hsl(value)
+
       true ->
         {0, 0, 0, 255}
     end
@@ -152,6 +158,71 @@ defmodule Easel.WX do
 
   defp normalize_float(s) do
     if String.contains?(s, "."), do: s, else: s <> ".0"
+  end
+
+  defp parse_hsl(str) do
+    case Regex.run(~r/hsl\(\s*([\d.]+)\s*,\s*([\d.]+)%\s*,\s*([\d.]+)%\s*\)/, str) do
+      [_, h, s, l] ->
+        hsl_to_rgb(parse_number(h), parse_number(s) / 100, parse_number(l) / 100, 255)
+
+      _ ->
+        {0, 0, 0, 255}
+    end
+  end
+
+  defp parse_hsla(str) do
+    case Regex.run(
+           ~r/hsla\(\s*([\d.]+)\s*,\s*([\d.]+)%\s*,\s*([\d.]+)%\s*,\s*([\d.]+)\s*\)/,
+           str
+         ) do
+      [_, h, s, l, a] ->
+        hsl_to_rgb(
+          parse_number(h),
+          parse_number(s) / 100,
+          parse_number(l) / 100,
+          round(parse_number(a) * 255)
+        )
+
+      _ ->
+        {0, 0, 0, 255}
+    end
+  end
+
+  defp parse_number(s) do
+    if String.contains?(s, ".") do
+      String.to_float(s)
+    else
+      String.to_integer(s) * 1.0
+    end
+  end
+
+  defp hsl_to_rgb(h, s, l, a) do
+    h = h / 360.0
+    {r, g, b} =
+      if s == 0.0 do
+        {l, l, l}
+      else
+        q = if l < 0.5, do: l * (1 + s), else: l + s - l * s
+        p = 2 * l - q
+        {hue_to_rgb(p, q, h + 1 / 3), hue_to_rgb(p, q, h), hue_to_rgb(p, q, h - 1 / 3)}
+      end
+
+    {round(r * 255), round(g * 255), round(b * 255), a}
+  end
+
+  defp hue_to_rgb(p, q, t) do
+    t = cond do
+      t < 0 -> t + 1
+      t > 1 -> t - 1
+      true -> t
+    end
+
+    cond do
+      t < 1 / 6 -> p + (q - p) * 6 * t
+      t < 1 / 2 -> q
+      t < 2 / 3 -> p + (q - p) * (2 / 3 - t) * 6
+      true -> p
+    end
   end
 
   @doc """
