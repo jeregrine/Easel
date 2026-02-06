@@ -311,8 +311,7 @@ defmodule Easel.WX do
 
     defstruct [
       :frame, :panel, :bitmap, :ops, :width, :height,
-      :animate_fn, :animate_state, :event_handlers,
-      dpr: 1.0
+      :animate_fn, :animate_state, :event_handlers
     ]
 
     @unsupported_ops ~w(
@@ -448,8 +447,7 @@ defmodule Easel.WX do
         frame = :wxFrame.new(:wx.null(), @wx_id_any, title, style: frame_style)
 
         panel = :wxPanel.new(frame)
-        dpr = :wxWindow.getContentScaleFactor(frame)
-        bitmap = :wxBitmap.new(round(width * dpr), round(height * dpr))
+        bitmap = :wxBitmap.new(width, height)
 
         :wxFrame.connect(panel, :paint, [:callback])
         :wxFrame.connect(frame, :close_window)
@@ -487,7 +485,6 @@ defmodule Easel.WX do
           ops: ops,
           width: width,
           height: height,
-          dpr: dpr,
           animate_fn: animate_fn,
           animate_state: animate_state,
           event_handlers: event_handlers
@@ -611,7 +608,7 @@ defmodule Easel.WX do
 
     # ── Painting (double buffered) ──────────────────────────────────
 
-    defp paint(%__MODULE__{panel: panel, bitmap: bitmap, ops: ops, width: width, height: height, dpr: dpr}) do
+    defp paint(%__MODULE__{panel: panel, bitmap: bitmap, ops: ops, width: width, height: height}) do
       panel_dc = :wxPaintDC.new(panel)
       bitmap_dc = :wxMemoryDC.new(bitmap)
 
@@ -619,7 +616,6 @@ defmodule Easel.WX do
       :wxMemoryDC.clear(bitmap_dc)
 
       gc = :wxGraphicsContext.create(bitmap_dc)
-      :wxGraphicsContext.scale(gc, dpr, dpr)
 
       draw_state = %{
         gc: gc,
@@ -648,15 +644,10 @@ defmodule Easel.WX do
       # GC must be destroyed to flush drawing to the bitmap DC before blit
       :wxGraphicsContext.destroy(gc)
 
-      bw = round(width * dpr)
-      bh = round(height * dpr)
-
-      :wxDC.setUserScale(panel_dc, 1.0 / dpr, 1.0 / dpr)
-
       :wxPaintDC.blit(
         panel_dc,
         {0, 0},
-        {bw, bh},
+        {width, height},
         bitmap_dc,
         {0, 0}
       )
