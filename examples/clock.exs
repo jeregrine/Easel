@@ -1,5 +1,6 @@
 # Animated analog clock
 # Run: mix run examples/clock.exs
+# (Must use `mix run`, not `elixir`, to load project modules)
 
 alias Easel.API
 
@@ -154,7 +155,7 @@ defmodule Clock do
   end
 end
 
-if Easel.WX.available?() do
+if Code.ensure_loaded?(Easel.WX) and Easel.WX.available?() do
   Easel.WX.animate(size, size, nil, fn _state ->
     canvas = Clock.render(size, cx, cy, radius)
     {canvas, nil}

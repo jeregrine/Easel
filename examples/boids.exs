@@ -182,7 +182,7 @@ boids = Boids.init()
 # If wx is available, run the animation in a native window.
 # Click to add a burst of new boids at the cursor position.
 # Otherwise, just simulate a few frames and print stats.
-if Easel.WX.available?() do
+if Code.ensure_loaded?(Easel.WX) and Easel.WX.available?() do
   Easel.WX.animate(Boids.width(), Boids.height(), boids, fn boids ->
     new_boids = Boids.tick(boids)
     canvas = Boids.render(new_boids)
