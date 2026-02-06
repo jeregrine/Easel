@@ -951,8 +951,8 @@ defmodule Easel.WX do
         end
 
       pen = :wxPen.new({r, g, b, a}, width: width, style: style)
-      :wxPen.setCap(pen, state.line_cap)
-      :wxPen.setJoin(pen, state.line_join)
+      :wxPen.setCap(pen, wx_const(state.line_cap))
+      :wxPen.setJoin(pen, wx_const(state.line_join))
       :wxGraphicsContext.setPen(state.gc, pen)
     end
 
