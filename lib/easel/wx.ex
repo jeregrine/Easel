@@ -224,12 +224,17 @@ defmodule Easel.WX do
     Record.defrecordp(:wxMouse, Record.extract(:wxMouse, from_lib: "wx/include/wx.hrl"))
     Record.defrecordp(:wxKey, Record.extract(:wxKey, from_lib: "wx/include/wx.hrl"))
 
-    # wx constants (extracted from wx.hrl, stable across versions)
+    # wx constants — plain integers, safe as compile-time attrs
     @wx_id_any -1
     @wx_default_frame_style 541_072_960
     @wx_resize_border 64
     @wx_vertical 8
     @wx_expand 8192
+
+    # Style constants are runtime-resolved via persistent_term (require wx:new() first).
+    # We use wxe_util:get_const/1 which is what the Erlang wx.hrl macros expand to.
+    # Callers pass atoms like :wxPENSTYLE_TRANSPARENT and get back integers.
+    defp wx_const(atom) when is_atom(atom), do: :wxe_util.get_const(atom)
 
     defstruct [
       :frame, :panel, :bitmap, :ops, :width, :height,
@@ -664,21 +669,21 @@ defmodule Easel.WX do
 
     defp execute_op(["fillRect", [x, y, w, h]], state) do
       apply_brush(state)
-      :wxGraphicsContext.setPen(state.gc, :wxPen.new({0, 0, 0, 0}, width: 0, style: :wxPENSTYLE_TRANSPARENT))
+      :wxGraphicsContext.setPen(state.gc, :wxPen.new({0, 0, 0, 0}, width: 0, style: wx_const(:wxPENSTYLE_TRANSPARENT)))
       :wxGraphicsContext.drawRectangle(state.gc, to_float(x), to_float(y), to_float(w), to_float(h))
       state
     end
 
     defp execute_op(["strokeRect", [x, y, w, h]], state) do
       apply_pen(state)
-      :wxGraphicsContext.setBrush(state.gc, :wxBrush.new({0, 0, 0, 0}, style: :wxBRUSHSTYLE_TRANSPARENT))
+      :wxGraphicsContext.setBrush(state.gc, :wxBrush.new({0, 0, 0, 0}, style: wx_const(:wxBRUSHSTYLE_TRANSPARENT)))
       :wxGraphicsContext.drawRectangle(state.gc, to_float(x), to_float(y), to_float(w), to_float(h))
       state
     end
 
     defp execute_op(["clearRect", [x, y, w, h]], state) do
       :wxGraphicsContext.setBrush(state.gc, :wxBrush.new({255, 255, 255, 255}))
-      :wxGraphicsContext.setPen(state.gc, :wxPen.new({0, 0, 0, 0}, width: 0, style: :wxPENSTYLE_TRANSPARENT))
+      :wxGraphicsContext.setPen(state.gc, :wxPen.new({0, 0, 0, 0}, width: 0, style: wx_const(:wxPENSTYLE_TRANSPARENT)))
       :wxGraphicsContext.drawRectangle(state.gc, to_float(x), to_float(y), to_float(w), to_float(h))
       state
     end
@@ -737,12 +742,15 @@ defmodule Easel.WX do
     defp execute_op(["arc", args], state) do
       state = ensure_path(state)
       [cx, cy, radius, start_angle, end_angle | rest] = args
-      _anticlockwise = List.first(rest, false)
+      anticlockwise = List.first(rest, false)
+      # Canvas "anticlockwise" is the inverse of wx "Clockwise"
+      clockwise = not anticlockwise
 
       :wxGraphicsPath.addArc(
         state.path,
         to_float(cx), to_float(cy), to_float(radius),
-        to_float(start_angle), to_float(end_angle)
+        to_float(start_angle), to_float(end_angle),
+        clockwise
       )
 
       state
@@ -938,8 +946,8 @@ defmodule Easel.WX do
 
       style =
         case state.line_dash do
-          [_ | _] -> :wxPENSTYLE_SHORT_DASH
-          _ -> :wxPENSTYLE_SOLID
+          [_ | _] -> wx_const(:wxPENSTYLE_SHORT_DASH)
+          _ -> wx_const(:wxPENSTYLE_SOLID)
         end
 
       pen = :wxPen.new({r, g, b, a}, width: width, style: style)
@@ -952,9 +960,9 @@ defmodule Easel.WX do
       font =
         :wxFont.new(
           state.font_size,
-          :wxFONTFAMILY_DEFAULT,
-          state.font_style,
-          state.font_weight,
+          wx_const(:wxFONTFAMILY_DEFAULT),
+          wx_const(state.font_style),
+          wx_const(state.font_weight),
           faceName: state.font_face
         )
 
