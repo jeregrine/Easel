@@ -258,13 +258,14 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
             this.templates = Object.assign(this.templates || {}, parsed);
           },
           drawFromData() {
+            this.ensureDpr();
             this.loadTemplates();
             const ops = JSON.parse(this.el.dataset.ops || "[]");
             if (ops.length > 0) {
               const ctx = this.context;
+              const dpr = this.dpr || 1;
               ctx.setTransform(1, 0, 0, 1, 0, 0);
               ctx.clearRect(0, 0, this.el.width, this.el.height);
-              const dpr = this.dpr || 1;
               ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
               this.executeOps(ops);
             }
@@ -279,17 +280,23 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
               }
             });
           },
-          mounted() {
+          ensureDpr() {
             const dpr = window.devicePixelRatio || 1;
             this.dpr = dpr;
-            const w = this.el.width;
-            const h = this.el.height;
-            this.el.width = w * dpr;
-            this.el.height = h * dpr;
-            this.el.style.width = w + "px";
-            this.el.style.height = h + "px";
+            const w = parseInt(this.el.getAttribute("width")) || this.el.width;
+            const h = parseInt(this.el.getAttribute("height")) || this.el.height;
+            this._logicalW = w;
+            this._logicalH = h;
+            if (this.el.width !== w * dpr || this.el.height !== h * dpr) {
+              this.el.width = w * dpr;
+              this.el.height = h * dpr;
+              this.el.style.width = w + "px";
+              this.el.style.height = h + "px";
+            }
+          },
+          mounted() {
+            this.ensureDpr();
             this.context = this.el.getContext("2d");
-            this.context.scale(dpr, dpr);
             this.templates = {};
             this._dirty = false;
             this._rafId = null;
