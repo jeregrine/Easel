@@ -1,12 +1,12 @@
-defmodule KinoCanvas.API do
+defmodule Canvas.API do
   @moduledoc """
   Represents the Canvas API, in elixir!
   """
-  dir = :code.priv_dir(:kino_canvas)
+  dir = :code.priv_dir(:canvas)
 
   idl =
     File.read!("#{dir}/web_idl.json")
-    |> Jason.decode!()
+    |> JSON.decode!()
     |> Enum.filter(fn val ->
       val["type"] in ["interface", "interface mixin"]
     end)
@@ -23,7 +23,7 @@ defmodule KinoCanvas.API do
 
   %{"data" => bcd} =
     File.read!("#{dir}/compat.json")
-    |> Jason.decode!()
+    |> JSON.decode!()
 
   canvas_ops =
     for {func, stuff} <- bcd, stuff["__compat"]["status"]["deprecated"] == false do
@@ -59,11 +59,11 @@ defmodule KinoCanvas.API do
     |> Enum.reject(&is_nil/1)
 
   def set(ctx, key, val) do
-    KinoCanvas.push_op(ctx, ["set", [key, val]])
+    Canvas.push_op(ctx, ["set", [key, val]])
   end
 
   def call(ctx, op, arguments) do
-    KinoCanvas.push_op(ctx, [op, arguments])
+    Canvas.push_op(ctx, [op, arguments])
   end
 
   for op <- canvas_ops do

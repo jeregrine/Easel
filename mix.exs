@@ -1,11 +1,11 @@
-defmodule KinoCanvas.MixProject do
+defmodule Canvas.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :kino_canvas,
+      app: :canvas,
       version: "0.1.0",
-      elixir: "~> 1.13",
+      elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
       deps: deps()
     ]
@@ -18,9 +18,6 @@ defmodule KinoCanvas.MixProject do
   end
 
   defp deps do
-    [
-      {:jason, "~> 1.2"},
-      {:kino, github: "livebook-dev/kino"}
-    ]
+    []
   end
 end
