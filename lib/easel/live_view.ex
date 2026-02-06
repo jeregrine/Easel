@@ -235,5 +235,104 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
     def clear(socket, id) do
       Phoenix.LiveView.push_event(socket, "easel:#{id}:clear", %{})
     end
+
+    @doc """
+    Starts a server-side animation loop that redraws a canvas at a fixed interval.
+
+    The `tick_fn` receives the current state and must return `{%Easel{}, new_state}`.
+    Each frame is pushed to the client as a clear+draw sequence.
+
+    Returns the socket with the animation state stored in assigns.
+
+    ## Options
+
+      * `:interval` - milliseconds between frames (default `16`, ~60fps)
+      * `:clear` - if `true`, clears before each frame (default `true`)
+
+    ## Example
+
+    In your LiveView `mount/3`:
+
+        def mount(_params, _session, socket) do
+          socket =
+            socket
+            |> assign(:balls, initial_balls())
+            |> Easel.LiveView.animate("my-canvas", :balls, fn balls ->
+              new_balls = tick(balls)
+              canvas = render_balls(new_balls)
+              {canvas, new_balls}
+            end)
+
+          {:ok, socket}
+        end
+
+    The animation is identified by the canvas id. To stop it:
+
+        Easel.LiveView.stop_animation(socket, "my-canvas")
+
+    Your LiveView must include a `handle_info` clause to receive ticks:
+
+        def handle_info({:easel_tick, id}, socket) do
+          {:noreply, Easel.LiveView.tick(socket, id)}
+        end
+    """
+    def animate(socket, id, state_key, tick_fn, opts \\ []) do
+      interval = Keyword.get(opts, :interval, 16)
+      clear = Keyword.get(opts, :clear, true)
+
+      anim_key = animation_key(id)
+
+      Process.send_after(self(), {:easel_tick, id}, interval)
+
+      Phoenix.Component.assign(socket, anim_key, %{
+        tick_fn: tick_fn,
+        state_key: state_key,
+        interval: interval,
+        clear: clear,
+        running: true
+      })
+    end
+
+    @doc """
+    Processes an animation tick. Call this from your `handle_info`:
+
+        def handle_info({:easel_tick, id}, socket) do
+          {:noreply, Easel.LiveView.tick(socket, id)}
+        end
+    """
+    def tick(socket, id) do
+      anim_key = animation_key(id)
+      anim = socket.assigns[anim_key]
+
+      if anim && anim.running do
+        state = socket.assigns[anim.state_key]
+        {canvas, new_state} = anim.tick_fn.(state)
+
+        # Schedule next tick
+        Process.send_after(self(), {:easel_tick, id}, anim.interval)
+
+        socket
+        |> Phoenix.Component.assign(anim.state_key, new_state)
+        |> draw(id, canvas, clear: anim.clear)
+      else
+        socket
+      end
+    end
+
+    @doc """
+    Stops a running animation.
+    """
+    def stop_animation(socket, id) do
+      anim_key = animation_key(id)
+      anim = socket.assigns[anim_key]
+
+      if anim do
+        Phoenix.Component.assign(socket, anim_key, %{anim | running: false})
+      else
+        socket
+      end
+    end
+
+    defp animation_key(id), do: String.to_atom("easel_anim_#{id}")
   end
 end

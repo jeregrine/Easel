@@ -205,5 +205,87 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
         assert [["easel:my-canvas:clear", %{}]] = events
       end
     end
+
+    describe "animate/5" do
+      setup do
+        socket = %Phoenix.LiveView.Socket{
+          private: %{live_temp: %{}},
+          endpoint: nil,
+          assigns: %{__changed__: %{}, counter: 0}
+        }
+
+        {:ok, socket: socket}
+      end
+
+      test "stores animation state in assigns", %{socket: socket} do
+        tick_fn = fn count ->
+          canvas = Easel.new(100, 100) |> Easel.API.fill_rect(0, 0, count, count)
+          {canvas, count + 1}
+        end
+
+        socket = Easel.LiveView.animate(socket, "anim-canvas", :counter, tick_fn)
+
+        anim = socket.assigns[:easel_anim_anim_canvas]
+        assert anim.running == true
+        assert anim.state_key == :counter
+        assert anim.interval == 16
+        assert anim.clear == true
+        assert is_function(anim.tick_fn, 1)
+      end
+
+      test "animate with custom interval", %{socket: socket} do
+        tick_fn = fn s -> {Easel.new(10, 10), s} end
+
+        socket = Easel.LiveView.animate(socket, "c1", :counter, tick_fn, interval: 1000)
+
+        anim = socket.assigns[:easel_anim_c1]
+        assert anim.interval == 1000
+      end
+
+      test "tick calls tick_fn and pushes draw", %{socket: socket} do
+        tick_fn = fn count ->
+          canvas = Easel.new(100, 100) |> Easel.API.fill_rect(0, 0, count, count)
+          {canvas, count + 1}
+        end
+
+        socket = Easel.LiveView.animate(socket, "anim-canvas", :counter, tick_fn)
+        socket = Easel.LiveView.tick(socket, "anim-canvas")
+
+        # Counter should have advanced
+        assert socket.assigns.counter == 1
+
+        # Should have pushed clear + draw events
+        events = socket.private.live_temp[:push_events]
+        assert [["easel:anim-canvas:draw", %{ops: _}], ["easel:anim-canvas:clear", %{}] | _] = events
+      end
+
+      test "stop_animation sets running to false", %{socket: socket} do
+        tick_fn = fn s -> {Easel.new(10, 10), s} end
+
+        socket = Easel.LiveView.animate(socket, "c1", :counter, tick_fn)
+        socket = Easel.LiveView.stop_animation(socket, "c1")
+
+        anim = socket.assigns[:easel_anim_c1]
+        assert anim.running == false
+      end
+
+      test "tick does nothing when stopped", %{socket: socket} do
+        tick_fn = fn count ->
+          {Easel.new(10, 10) |> Easel.API.fill_rect(0, 0, 10, 10), count + 1}
+        end
+
+        socket = Easel.LiveView.animate(socket, "c1", :counter, tick_fn)
+        socket = Easel.LiveView.stop_animation(socket, "c1")
+        socket = Easel.LiveView.tick(socket, "c1")
+
+        # Counter should not have advanced
+        assert socket.assigns.counter == 0
+      end
+
+      test "stop_animation is safe when no animation exists", %{socket: socket} do
+        socket = Easel.LiveView.stop_animation(socket, "nonexistent")
+        assert socket == socket
+      end
+    end
   end
 end

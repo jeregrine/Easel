@@ -93,6 +93,39 @@ Available: `on_click`, `on_mouse_down`, `on_mouse_up`, `on_mouse_move`, `on_key_
 
 Key events include `key`, `code`, `ctrl`, `shift`, `alt`, and `meta` fields.
 
+### Animation
+
+Run a server-side animation loop that pushes frames to the client:
+
+```elixir
+def mount(_params, _session, socket) do
+  socket =
+    socket
+    |> assign(:balls, initial_balls())
+    |> Easel.LiveView.animate("my-canvas", :balls, fn balls ->
+      new_balls = tick(balls)
+      canvas = render_balls(new_balls)
+      {canvas, new_balls}
+    end, interval: 16)
+
+  {:ok, socket}
+end
+```
+
+Your LiveView must handle the tick message:
+
+```elixir
+def handle_info({:easel_tick, id}, socket) do
+  {:noreply, Easel.LiveView.tick(socket, id)}
+end
+```
+
+To stop the animation:
+
+```elixir
+Easel.LiveView.stop_animation(socket, "my-canvas")
+```
+
 ## wx Backend
 
 Easel includes an optional native rendering backend using Erlang's `:wx` (wxWidgets).
