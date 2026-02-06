@@ -346,6 +346,84 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
     end
 
     @doc """
+    Renders an export button that downloads the canvas as a PNG image.
+
+    When clicked, converts the target canvas to a PNG and triggers a
+    browser file download.
+
+    ## Attributes
+
+      * `for` (required) — the DOM id of the canvas to export
+      * `filename` — download filename (default `"canvas.png"`)
+      * `class` — CSS class for the button
+
+    Any additional attributes are passed through to the `<button>` element.
+
+    ## Example
+
+        <Easel.LiveView.canvas id="my-canvas" width={300} height={300} ops={@ops} />
+        <Easel.LiveView.export_button for="my-canvas" filename="drawing.png">
+          Export PNG
+        </Easel.LiveView.export_button>
+    """
+    attr :for, :string, required: true
+    attr :filename, :string, default: "canvas.png"
+    attr :class, :string, default: nil
+    attr :rest, :global
+    slot :inner_block, required: true
+
+    def export_button(assigns) do
+      ~H"""
+      <button
+        class={@class}
+        phx-hook=".EaselExport"
+        id={"easel-export-#{@for}"}
+        data-canvas-id={@for}
+        data-filename={@filename}
+        {@rest}
+      >
+        {render_slot(@inner_block)}
+      </button>
+      <script :type={ColocatedHook} name=".EaselExport" runtime>
+        {
+          mounted() {
+            this.el.addEventListener("click", (e) => {
+              e.preventDefault();
+              const canvasId = this.el.dataset.canvasId;
+              const filename = this.el.dataset.filename || "canvas.png";
+
+              // Find the canvas - check for canvas_stack (multiple layers)
+              const stack = document.getElementById(canvasId);
+              let canvas;
+              if (stack && stack.tagName !== "CANVAS") {
+                // canvas_stack — composite all layers onto a temp canvas
+                const layers = stack.querySelectorAll("canvas");
+                if (layers.length === 0) return;
+                const first = layers[0];
+                canvas = document.createElement("canvas");
+                canvas.width = first.width;
+                canvas.height = first.height;
+                const ctx = canvas.getContext("2d");
+                for (const layer of layers) {
+                  ctx.drawImage(layer, 0, 0);
+                }
+              } else {
+                canvas = stack;
+              }
+
+              if (!canvas) return;
+              const link = document.createElement("a");
+              link.download = filename;
+              link.href = canvas.toDataURL("image/png");
+              link.click();
+            });
+          }
+        }
+      </script>
+      """
+    end
+
+    @doc """
     Renders a stack of layered canvases. Each layer is an independent
     `<canvas>` element, stacked via CSS `position: absolute`. Only layers
     whose ops change get redrawn — LiveView's normal diffing handles this.

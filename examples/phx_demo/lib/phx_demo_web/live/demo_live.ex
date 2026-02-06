@@ -38,35 +38,35 @@ defmodule PhxDemoWeb.DemoLive do
       <h2 class="text-xl font-semibold mb-4">Static</h2>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-10 items-start">
-        <.example title="Smiley">
+        <.example title="Smiley" canvas_id="smiley">
           <Easel.LiveView.canvas id="smiley" width={200} height={200} ops={@smiley.ops} />
         </.example>
 
-        <.example title="Chart">
+        <.example title="Chart" canvas_id="chart">
           <Easel.LiveView.canvas id="chart" width={300} height={200} ops={@chart.ops} />
         </.example>
 
-        <.example title="Starfield">
+        <.example title="Starfield" canvas_id="starfield">
           <Easel.LiveView.canvas id="starfield" width={300} height={200} ops={@starfield.ops} />
         </.example>
 
-        <.example title="Spiral">
+        <.example title="Spiral" canvas_id="spiral">
           <Easel.LiveView.canvas id="spiral" width={250} height={250} ops={@spiral.ops} />
         </.example>
 
-        <.example title="Fractal Tree">
+        <.example title="Fractal Tree" canvas_id="tree">
           <Easel.LiveView.canvas id="tree" width={300} height={250} ops={@tree.ops} />
         </.example>
 
-        <.example title="Mondrian">
+        <.example title="Mondrian" canvas_id="mondrian">
           <Easel.LiveView.canvas id="mondrian" width={250} height={250} ops={@mondrian.ops} />
         </.example>
 
-        <.example title="Sierpinski Triangle">
+        <.example title="Sierpinski Triangle" canvas_id="sierpinski">
           <Easel.LiveView.canvas id="sierpinski" width={300} height={260} ops={@sierpinski.ops} />
         </.example>
 
-        <.example title="Mandelbrot Set">
+        <.example title="Mandelbrot Set" canvas_id="mandelbrot">
           <Easel.LiveView.canvas id="mandelbrot" width={200} height={200} ops={@mandelbrot.ops} />
         </.example>
       </div>
@@ -77,7 +77,12 @@ defmodule PhxDemoWeb.DemoLive do
   defp example(assigns) do
     ~H"""
     <div class="min-w-0">
-      <h3 class="font-semibold text-lg mb-2"><%= @title %></h3>
+      <div class="flex items-center gap-2 mb-2">
+        <h3 class="font-semibold text-lg"><%= @title %></h3>
+        <Easel.LiveView.export_button for={@canvas_id} filename={"#{@canvas_id}.png"} class="text-xs text-gray-400 hover:text-gray-700 cursor-pointer">
+          📥
+        </Easel.LiveView.export_button>
+      </div>
       <%= render_slot(@inner_block) %>
     </div>
     """

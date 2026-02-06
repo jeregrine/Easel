@@ -2,6 +2,14 @@
 
 Easel allows you to interact and draw on a canvas. The API is a `snake_cased` version of the [CanvasRenderingContext2D](https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D) with the addition of `set` and `call` if you need to set a property or call a function not yet supported.
 
+The idea is you create a canvas, apply the draw operations to it then send it off to the Browser or Wx to render. This allows us to use Elixir to draw basically anything, further it comes with the following features:
+
+- Optional Phoenix LiveView components and hooks are available.
+  - With support for layers.
+  - Animations and Event handling
+  - And templating and instancing of drawing, so you don't have to send all the draw commands on every frame, just the values that have changed.
+- Optional Wx Rendering for local art and speed.
+
 ## Example
 
 Build a set of draw operations:
@@ -13,8 +21,15 @@ canvas =
   |> Easel.fill_rect(0, 0, 100, 100)
   |> Easel.set_line_width(10)
   |> Easel.stroke_rect(100, 100, 100, 100)
-  |> Easel.render()
 ```
+
+And render it
+
+```elixir
+Easel.render(canvas)
+```
+
+This basically just reverse the ops list and marks it as rendered. If you want to make a picture you will need a fe
 
 ## Phoenix LiveView
 
@@ -154,14 +169,14 @@ Pass templates to the canvas component alongside ops:
 
 Each instance map may contain:
 
-| Key        | Description                          | Default |
-|------------|--------------------------------------|---------|
-| `:x`, `:y` | Translation                         | `0`     |
-| `:rotate`  | Rotation in radians                  | `0`     |
-| `:scale_x`, `:scale_y` | Scale factors              | `1`     |
-| `:fill`    | Fill style override                  | —       |
-| `:stroke`  | Stroke style override                | —       |
-| `:alpha`   | Global alpha override                | —       |
+| Key                    | Description           | Default |
+| ---------------------- | --------------------- | ------- |
+| `:x`, `:y`             | Translation           | `0`     |
+| `:rotate`              | Rotation in radians   | `0`     |
+| `:scale_x`, `:scale_y` | Scale factors         | `1`     |
+| `:fill`                | Fill style override   | —       |
+| `:stroke`              | Stroke style override | —       |
+| `:alpha`               | Global alpha override | —       |
 
 For non-JS backends (wx, custom renderers), call `Easel.expand/1` to flatten
 instances into plain Canvas 2D ops (save/translate/rotate/fill/restore):
@@ -172,10 +187,10 @@ canvas |> Easel.expand()  # __instances → plain ops
 
 **Payload comparison (100 boids):**
 
-| Approach | Ops/frame | Bytes/frame |
-|----------|-----------|-------------|
-| Inline ops (no templates) | ~504 | ~19 KB |
-| Templates + instances | 1 | ~7.8 KB |
+| Approach                  | Ops/frame | Bytes/frame |
+| ------------------------- | --------- | ----------- |
+| Inline ops (no templates) | ~504      | ~19 KB      |
+| Templates + instances     | 1         | ~7.8 KB     |
 
 ### Animation
 

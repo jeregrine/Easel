@@ -301,6 +301,8 @@ defmodule Easel.WX do
     @wx_resize_border 64
     @wx_vertical 8
     @wx_expand 8192
+    @wx_bitmap_type_png 15
+    @wx_id_export 1001
 
     # Style constants are runtime-resolved via persistent_term (require wx:new() first).
     # We use wxe_util:get_const/1 which is what the Erlang wx.hrl macros expand to.
@@ -447,6 +449,14 @@ defmodule Easel.WX do
 
         frame = :wxFrame.new(:wx.null(), @wx_id_any, title, style: frame_style)
 
+        # File menu with Export to Image
+        menu_bar = :wxMenuBar.new()
+        file_menu = :wxMenu.new()
+        :wxMenu.append(file_menu, @wx_id_export, ~c"Export to Image...\tCtrl+E")
+        :wxMenuBar.append(menu_bar, file_menu, ~c"&File")
+        :wxFrame.setMenuBar(frame, menu_bar)
+        :wxFrame.connect(frame, :command_menu_selected)
+
         panel = :wxPanel.new(frame)
         dpr = :wxWindow.getContentScaleFactor(frame)
         bitmap = :wxBitmap.new(round(width * dpr), round(height * dpr))
@@ -543,6 +553,11 @@ defmodule Easel.WX do
       {:noreply, state}
     end
 
+    def handle_event(wx(id: @wx_id_export, event: {:wxCommand, :command_menu_selected, _, _, _}), state) do
+      export_image(state)
+      {:noreply, state}
+    end
+
     def handle_event(_event, state) do
       {:noreply, state}
     end
@@ -578,7 +593,27 @@ defmodule Easel.WX do
       :wx.destroy()
     end
 
-    def terminate(_reason, _state), do: :ok
+    defp export_image(%__MODULE__{frame: frame, bitmap: bitmap}) do
+      dialog = :wxFileDialog.new(frame, [
+        {:message, ~c"Export to Image"},
+        {:defaultFile, ~c"canvas.png"},
+        {:style, Bitwise.bor(0x0002, 0x0004)}  # wxFD_SAVE | wxFD_OVERWRITE_PROMPT
+      ])
+      :wxFileDialog.setWildcard(dialog, ~c"PNG files (*.png)|*.png")
+
+      case :wxFileDialog.showModal(dialog) do
+        5100 ->  # wxID_OK
+          path = :wxFileDialog.getPath(dialog) |> List.to_string()
+          path = if String.ends_with?(path, ".png"), do: path, else: path <> ".png"
+          image = :wxBitmap.convertToImage(bitmap)
+          :wxImage.saveFile(image, String.to_charlist(path), @wx_bitmap_type_png)
+          :wxImage.destroy(image)
+        _ ->
+          :ok
+      end
+
+      :wxFileDialog.destroy(dialog)
+    end
 
     @impl true
     def code_change(_old_vsn, state, _extra) do
