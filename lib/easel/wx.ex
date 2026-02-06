@@ -224,6 +224,13 @@ defmodule Easel.WX do
     Record.defrecordp(:wxMouse, Record.extract(:wxMouse, from_lib: "wx/include/wx.hrl"))
     Record.defrecordp(:wxKey, Record.extract(:wxKey, from_lib: "wx/include/wx.hrl"))
 
+    # wx constants (extracted from wx.hrl, stable across versions)
+    @wx_id_any -1
+    @wx_default_frame_style 541_072_960
+    @wx_resize_border 64
+    @wx_vertical 8
+    @wx_expand 8192
+
     defstruct [
       :frame, :panel, :bitmap, :ops, :width, :height,
       :animate_fn, :animate_state, :event_handlers
@@ -355,11 +362,11 @@ defmodule Easel.WX do
       :wx.batch(fn ->
         frame_style =
           Bitwise.bxor(
-            :wx_const.wxDEFAULT_FRAME_STYLE,
-            :wx_const.wxRESIZE_BORDER
+            @wx_default_frame_style,
+            @wx_resize_border
           )
 
-        frame = :wxFrame.new(:wx.null(), :wx_const.wxID_ANY, title, style: frame_style)
+        frame = :wxFrame.new(:wx.null(), @wx_id_any, title, style: frame_style)
 
         panel = :wxPanel.new(frame)
         bitmap = :wxBitmap.new(width, height)
@@ -377,8 +384,8 @@ defmodule Easel.WX do
 
         :wxFrame.setClientSize(frame, {width, height})
 
-        sizer = :wxBoxSizer.new(:wx_const.wxVERTICAL)
-        :wxSizer.add(sizer, panel, flag: :wx_const.wxEXPAND, proportion: 1)
+        sizer = :wxBoxSizer.new(@wx_vertical)
+        :wxSizer.add(sizer, panel, flag: @wx_expand, proportion: 1)
         :wxPanel.setSizer(frame, sizer)
         :wxSizer.layout(sizer)
 
@@ -575,14 +582,17 @@ defmodule Easel.WX do
     # -- State --
 
     defp execute_op(["save", []], state) do
-      :wxGraphicsContext.pushState(state.gc)
-      saved_state = Map.drop(state, [:gc, :saved])
+      transform = :wxGraphicsContext.getTransform(state.gc)
+      saved_state = Map.drop(state, [:gc, :saved]) |> Map.put(:transform, transform)
       %{state | saved: [saved_state | state.saved]}
     end
 
     defp execute_op(["restore", []], %{saved: [prev | rest]} = state) do
-      :wxGraphicsContext.popState(state.gc)
-      Map.merge(state, prev) |> Map.put(:saved, rest)
+      if prev[:transform] do
+        :wxGraphicsContext.setTransform(state.gc, prev.transform)
+      end
+
+      Map.merge(state, Map.delete(prev, :transform)) |> Map.put(:saved, rest)
     end
 
     defp execute_op(["restore", []], state), do: state

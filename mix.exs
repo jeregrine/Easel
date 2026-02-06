@@ -21,8 +21,12 @@ defmodule Easel.MixProject do
 
   def application do
     [
-      extra_applications: [:logger]
+      extra_applications: [:logger] ++ optional_apps()
     ]
+  end
+
+  defp optional_apps do
+    if match?({:module, _}, Code.ensure_compiled(:wx)), do: [:wx], else: []
   end
 
   defp deps do
