@@ -283,8 +283,8 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
           ensureDpr() {
             const dpr = window.devicePixelRatio || 1;
             this.dpr = dpr;
-            const w = parseInt(this.el.getAttribute("width")) || this.el.width;
-            const h = parseInt(this.el.getAttribute("height")) || this.el.height;
+            const w = this._logicalW || parseInt(this.el.getAttribute("width")) || this.el.width;
+            const h = this._logicalH || parseInt(this.el.getAttribute("height")) || this.el.height;
             this._logicalW = w;
             this._logicalH = h;
             if (this.el.width !== w * dpr || this.el.height !== h * dpr) {
