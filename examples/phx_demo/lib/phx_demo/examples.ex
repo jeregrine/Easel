@@ -534,6 +534,10 @@ defmodule PhxDemo.Examples do
 
   @boids_width 800
   @boids_height 600
+  @max_speed 4.0
+  @max_force 0.1
+  @perception 50.0
+  @separation_dist 25.0
 
   def boids_width, do: @boids_width
   def boids_height, do: @boids_height
@@ -554,44 +558,93 @@ defmodule PhxDemo.Examples do
 
   def boids_tick(boids) do
     Enum.map(boids, fn boid ->
-      {sx, sy, ax, ay, cx, cy, count} =
-        Enum.reduce(boids, {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0}, fn other, {sx, sy, ax, ay, cx, cy, n} ->
-          dx = other.x - boid.x
-          dy = other.y - boid.y
-          dist = :math.sqrt(dx * dx + dy * dy)
-
-          if dist > 0 and dist < 100 do
-            sep_factor = if dist < 25, do: -1.0 / max(dist, 1.0), else: 0.0
-            {sx + dx * sep_factor, sy + dy * sep_factor, ax + other.vx, ay + other.vy, cx + other.x, cy + other.y, n + 1}
-          else
-            {sx, sy, ax, ay, cx, cy, n}
-          end
-        end)
-
-      {nvx, nvy} =
-        if count > 0 do
-          avg_vx = ax / count
-          avg_vy = ay / count
-          center_x = cx / count
-          center_y = cy / count
-
-          vx = boid.vx + sx * 1.5 + (avg_vx - boid.vx) * 0.05 + (center_x - boid.x) * 0.005
-          vy = boid.vy + sy * 1.5 + (avg_vy - boid.vy) * 0.05 + (center_y - boid.y) * 0.005
-
-          speed = :math.sqrt(vx * vx + vy * vy)
-          max_speed = 4.0
-          if speed > max_speed, do: {vx / speed * max_speed, vy / speed * max_speed}, else: {vx, vy}
-        else
-          {boid.vx, boid.vy}
-        end
-
-      nx = boid.x + nvx
-      ny = boid.y + nvy
-      nx = if nx < 0, do: nx + @boids_width, else: if(nx > @boids_width, do: nx - @boids_width, else: nx)
-      ny = if ny < 0, do: ny + @boids_height, else: if(ny > @boids_height, do: ny - @boids_height, else: ny)
-
-      %{boid | x: nx, y: ny, vx: nvx, vy: nvy}
+      boid
+      |> boids_apply_rules(boids)
+      |> boids_limit_speed()
+      |> boids_move()
+      |> boids_wrap()
     end)
+  end
+
+  defp boids_apply_rules(boid, boids) do
+    {sep_x, sep_y, ali_x, ali_y, coh_x, coh_y, count} =
+      Enum.reduce(boids, {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0}, fn other, {sx, sy, ax, ay, cx, cy, n} ->
+        dx = other.x - boid.x
+        dy = other.y - boid.y
+        dist = :math.sqrt(dx * dx + dy * dy)
+
+        if dist > 0 and dist < @perception do
+          {sx2, sy2} =
+            if dist < @separation_dist do
+              {sx - dx / dist, sy - dy / dist}
+            else
+              {sx, sy}
+            end
+
+          {sx2, sy2, ax + other.vx, ay + other.vy, cx + other.x, cy + other.y, n + 1}
+        else
+          {sx, sy, ax, ay, cx, cy, n}
+        end
+      end)
+
+    if count > 0 do
+      # Alignment — steer toward average velocity
+      {avx, avy} = boids_steer(boid, ali_x / count, ali_y / count)
+      # Cohesion — steer toward average position
+      {cvx, cvy} = boids_steer(boid, coh_x / count - boid.x, coh_y / count - boid.y)
+      # Separation
+      {svx, svy} = {sep_x * @max_force * 1.5, sep_y * @max_force * 1.5}
+
+      %{boid | vx: boid.vx + svx + avx + cvx, vy: boid.vy + svy + avy + cvy}
+    else
+      boid
+    end
+  end
+
+  defp boids_steer(boid, target_vx, target_vy) do
+    mag = :math.sqrt(target_vx * target_vx + target_vy * target_vy)
+
+    if mag > 0 do
+      dvx = target_vx / mag * @max_speed - boid.vx
+      dvy = target_vy / mag * @max_speed - boid.vy
+      boids_limit_vec(dvx, dvy, @max_force)
+    else
+      {0.0, 0.0}
+    end
+  end
+
+  defp boids_limit_vec(x, y, max) do
+    mag = :math.sqrt(x * x + y * y)
+    if mag > max, do: {x / mag * max, y / mag * max}, else: {x, y}
+  end
+
+  defp boids_limit_speed(boid) do
+    speed = :math.sqrt(boid.vx * boid.vx + boid.vy * boid.vy)
+
+    if speed > @max_speed do
+      %{boid | vx: boid.vx / speed * @max_speed, vy: boid.vy / speed * @max_speed}
+    else
+      boid
+    end
+  end
+
+  defp boids_move(boid) do
+    %{boid | x: boid.x + boid.vx, y: boid.y + boid.vy}
+  end
+
+  defp boids_wrap(boid) do
+    %{boid |
+      x: boids_wrap_val(boid.x, @boids_width),
+      y: boids_wrap_val(boid.y, @boids_height)
+    }
+  end
+
+  defp boids_wrap_val(v, max) do
+    cond do
+      v < 0 -> v + max
+      v > max -> v - max
+      true -> v
+    end
   end
 
   def boids_render(boids) do
