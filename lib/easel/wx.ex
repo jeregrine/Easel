@@ -963,7 +963,7 @@ defmodule Easel.WX do
           wx_const(:wxFONTFAMILY_DEFAULT),
           wx_const(state.font_style),
           wx_const(state.font_weight),
-          faceName: state.font_face
+          face: state.font_face
         )
 
       :wxGraphicsContext.setFont(state.gc, font, tuple_to_wx_colour(state.fill_style))
