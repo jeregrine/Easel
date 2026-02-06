@@ -1,7 +1,6 @@
 # Sierpinski triangle fractal
 # Run: mix run examples/sierpinski.exs
 
-alias Easel.API
 
 width = 600
 height = 520
@@ -15,12 +14,12 @@ defmodule Sierpinski do
     if depth == 1 do
       # Draw filled triangle
       canvas
-      |> Easel.API.begin_path()
-      |> Easel.API.move_to(ax, ay)
-      |> Easel.API.line_to(bx, by)
-      |> Easel.API.line_to(cx, cy)
-      |> Easel.API.close_path()
-      |> Easel.API.fill()
+      |> Easel.begin_path()
+      |> Easel.move_to(ax, ay)
+      |> Easel.line_to(bx, by)
+      |> Easel.line_to(cx, cy)
+      |> Easel.close_path()
+      |> Easel.fill()
     else
       # Midpoints
       mab_x = (ax + bx) / 2
@@ -52,9 +51,9 @@ cy = padding + h
 
 canvas =
   Easel.new(width, height)
-  |> API.set_fill_style("#0d1117")
-  |> API.fill_rect(0, 0, width, height)
-  |> API.set_fill_style("#58a6ff")
+  |> Easel.set_fill_style("#0d1117")
+  |> Easel.fill_rect(0, 0, width, height)
+  |> Easel.set_fill_style("#58a6ff")
   |> Sierpinski.triangle(ax, ay, bx, by, cx, cy, depth)
   |> Easel.render()
 

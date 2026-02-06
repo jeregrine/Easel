@@ -9,7 +9,6 @@
 #   2. Alignment  — steer toward average heading of nearby boids
 #   3. Cohesion   — steer toward average position of nearby boids
 
-alias Easel.API
 
 defmodule Boids do
   @width 800
@@ -141,8 +140,8 @@ defmodule Boids do
   def render(boids) do
     canvas =
       Easel.new(@width, @height)
-      |> API.set_fill_style("#0a0a2e")
-      |> API.fill_rect(0, 0, @width, @height)
+      |> Easel.set_fill_style("#0a0a2e")
+      |> Easel.fill_rect(0, 0, @width, @height)
 
     Enum.reduce(boids, canvas, fn boid, acc ->
       angle = :math.atan2(boid.vy, boid.vx)
@@ -160,13 +159,13 @@ defmodule Boids do
       hue = round(angle / :math.pi() * 180 + 180)
 
       acc
-      |> API.begin_path()
-      |> API.move_to(x1, y1)
-      |> API.line_to(x2, y2)
-      |> API.line_to(x3, y3)
-      |> API.close_path()
-      |> API.set_fill_style("hsl(#{hue}, 70%, 60%)")
-      |> API.fill()
+      |> Easel.begin_path()
+      |> Easel.move_to(x1, y1)
+      |> Easel.line_to(x2, y2)
+      |> Easel.line_to(x3, y3)
+      |> Easel.close_path()
+      |> Easel.set_fill_style("hsl(#{hue}, 70%, 60%)")
+      |> Easel.fill()
     end)
   end
 end

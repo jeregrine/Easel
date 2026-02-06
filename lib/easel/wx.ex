@@ -13,11 +13,11 @@ defmodule Easel.WX do
 
       canvas =
         Easel.new(400, 300)
-        |> Easel.API.set_fill_style("blue")
-        |> Easel.API.fill_rect(50, 50, 100, 100)
-        |> Easel.API.set_stroke_style("red")
-        |> Easel.API.set_line_width(3)
-        |> Easel.API.stroke_rect(50, 50, 100, 100)
+        |> Easel.set_fill_style("blue")
+        |> Easel.fill_rect(50, 50, 100, 100)
+        |> Easel.set_stroke_style("red")
+        |> Easel.set_line_width(3)
+        |> Easel.stroke_rect(50, 50, 100, 100)
         |> Easel.render()
 
       # Opens a wx window and draws the operations

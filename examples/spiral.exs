@@ -1,7 +1,6 @@
 # Rainbow spiral
 # Run: mix run examples/spiral.exs
 
-alias Easel.API
 
 width = 500
 height = 500
@@ -12,10 +11,10 @@ points = turns * 100
 
 canvas =
   Easel.new(width, height)
-  |> API.set_fill_style("#111")
-  |> API.fill_rect(0, 0, width, height)
-  |> API.set_line_width(2)
-  |> API.set_line_cap("round")
+  |> Easel.set_fill_style("#111")
+  |> Easel.fill_rect(0, 0, width, height)
+  |> Easel.set_line_width(2)
+  |> Easel.set_line_cap("round")
 
 canvas =
   Enum.reduce(0..points, canvas, fn i, acc ->
@@ -32,18 +31,18 @@ canvas =
 
     if i == 0 do
       acc
-      |> API.begin_path()
-      |> API.move_to(x, y)
+      |> Easel.begin_path()
+      |> Easel.move_to(x, y)
     else
       acc
-      |> API.set_stroke_style(color)
-      |> API.begin_path()
-      |> API.move_to(
+      |> Easel.set_stroke_style(color)
+      |> Easel.begin_path()
+      |> Easel.move_to(
         cx + (t - 1 / points) * 200 * :math.cos(angle - turns * 2 * :math.pi() / points),
         cy + (t - 1 / points) * 200 * :math.sin(angle - turns * 2 * :math.pi() / points)
       )
-      |> API.line_to(x, y)
-      |> API.stroke()
+      |> Easel.line_to(x, y)
+      |> Easel.stroke()
     end
   end)
   |> Easel.render()

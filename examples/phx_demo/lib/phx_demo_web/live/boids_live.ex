@@ -1,7 +1,6 @@
 defmodule PhxDemoWeb.BoidsLive do
   use PhxDemoWeb, :live_view
 
-  alias Easel.API
 
   @width PhxDemo.Examples.boids_width()
   @height PhxDemo.Examples.boids_height()
@@ -13,8 +12,8 @@ defmodule PhxDemoWeb.BoidsLive do
     # Static background — sent once, never changes
     background =
       Easel.new(@width, @height)
-      |> API.set_fill_style("#0a0a2e")
-      |> API.fill_rect(0, 0, @width, @height)
+      |> Easel.set_fill_style("#0a0a2e")
+      |> Easel.fill_rect(0, 0, @width, @height)
       |> Easel.render()
 
     socket =
@@ -68,12 +67,12 @@ defmodule PhxDemoWeb.BoidsLive do
     Easel.new(@width, @height)
     |> Easel.template(:boid, fn c ->
       c
-      |> API.begin_path()
-      |> API.move_to(12, 0)
-      |> API.line_to(-4, -5)
-      |> API.line_to(-4, 5)
-      |> API.close_path()
-      |> API.fill()
+      |> Easel.begin_path()
+      |> Easel.move_to(12, 0)
+      |> Easel.line_to(-4, -5)
+      |> Easel.line_to(-4, 5)
+      |> Easel.close_path()
+      |> Easel.fill()
     end)
     |> Easel.instances(:boid, instances)
     |> Easel.render()

@@ -29,8 +29,8 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
         def handle_event("draw", _, socket) do
           canvas =
             Easel.new(300, 300)
-            |> Easel.API.set_fill_style("blue")
-            |> Easel.API.fill_rect(0, 0, 100, 100)
+            |> Easel.set_fill_style("blue")
+            |> Easel.fill_rect(0, 0, 100, 100)
             |> Easel.render()
 
           {:noreply, Easel.LiveView.draw(socket, "my-canvas", canvas)}
@@ -107,12 +107,12 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
           Easel.new(800, 600)
           |> Easel.template(:boid, fn c ->
             c
-            |> Easel.API.begin_path()
-            |> Easel.API.move_to(12, 0)
-            |> Easel.API.line_to(-4, -5)
-            |> Easel.API.line_to(-4, 5)
-            |> Easel.API.close_path()
-            |> Easel.API.fill()
+            |> Easel.begin_path()
+            |> Easel.move_to(12, 0)
+            |> Easel.line_to(-4, -5)
+            |> Easel.line_to(-4, 5)
+            |> Easel.close_path()
+            |> Easel.fill()
           end)
           |> Easel.instances(:boid, instances)
           |> Easel.render()

@@ -2,32 +2,31 @@ defmodule PhxDemo.Examples do
   @moduledoc """
   Drawing functions for each Easel example, returning rendered canvases.
   """
-  alias Easel.API
 
   # ── Smiley ──────────────────────────────────────────────────────
 
   def smiley do
     Easel.new(300, 300)
-    |> API.begin_path()
-    |> API.arc(150, 150, 100, 0, :math.pi() * 2)
-    |> API.set_fill_style("#FFD700")
-    |> API.fill()
-    |> API.set_stroke_style("#333")
-    |> API.set_line_width(3)
-    |> API.stroke()
-    |> API.begin_path()
-    |> API.arc(115, 120, 15, 0, :math.pi() * 2)
-    |> API.set_fill_style("#333")
-    |> API.fill()
-    |> API.begin_path()
-    |> API.arc(185, 120, 15, 0, :math.pi() * 2)
-    |> API.fill()
-    |> API.begin_path()
-    |> API.arc(150, 155, 60, 0.2, :math.pi() - 0.2)
-    |> API.set_stroke_style("#333")
-    |> API.set_line_width(4)
-    |> API.set_line_cap("round")
-    |> API.stroke()
+    |> Easel.begin_path()
+    |> Easel.arc(150, 150, 100, 0, :math.pi() * 2)
+    |> Easel.set_fill_style("#FFD700")
+    |> Easel.fill()
+    |> Easel.set_stroke_style("#333")
+    |> Easel.set_line_width(3)
+    |> Easel.stroke()
+    |> Easel.begin_path()
+    |> Easel.arc(115, 120, 15, 0, :math.pi() * 2)
+    |> Easel.set_fill_style("#333")
+    |> Easel.fill()
+    |> Easel.begin_path()
+    |> Easel.arc(185, 120, 15, 0, :math.pi() * 2)
+    |> Easel.fill()
+    |> Easel.begin_path()
+    |> Easel.arc(150, 155, 60, 0.2, :math.pi() - 0.2)
+    |> Easel.set_stroke_style("#333")
+    |> Easel.set_line_width(4)
+    |> Easel.set_line_cap("round")
+    |> Easel.stroke()
     |> Easel.render()
   end
 
@@ -69,19 +68,19 @@ defmodule PhxDemo.Examples do
 
     canvas =
       Easel.new(width, height)
-      |> API.set_fill_style("#fafafa")
-      |> API.fill_rect(0, 0, width, height)
-      |> API.set_fill_style("#1f2937")
-      |> API.set_font("bold 18px sans-serif")
-      |> API.set_text_align("center")
-      |> API.fill_text("Elixir Popularity Index", width / 2, 30)
-      |> API.set_stroke_style("#9ca3af")
-      |> API.set_line_width(1)
-      |> API.begin_path()
-      |> API.move_to(padding, padding)
-      |> API.line_to(padding, height - padding)
-      |> API.line_to(width - padding, height - padding)
-      |> API.stroke()
+      |> Easel.set_fill_style("#fafafa")
+      |> Easel.fill_rect(0, 0, width, height)
+      |> Easel.set_fill_style("#1f2937")
+      |> Easel.set_font("bold 18px sans-serif")
+      |> Easel.set_text_align("center")
+      |> Easel.fill_text("Elixir Popularity Index", width / 2, 30)
+      |> Easel.set_stroke_style("#9ca3af")
+      |> Easel.set_line_width(1)
+      |> Easel.begin_path()
+      |> Easel.move_to(padding, padding)
+      |> Easel.line_to(padding, height - padding)
+      |> Easel.line_to(width - padding, height - padding)
+      |> Easel.stroke()
 
     canvas =
       Enum.reduce(0..4, canvas, fn i, acc ->
@@ -89,16 +88,16 @@ defmodule PhxDemo.Examples do
         val = round(max_val * i / 4)
 
         acc
-        |> API.set_stroke_style("#e5e7eb")
-        |> API.set_line_width(0.5)
-        |> API.begin_path()
-        |> API.move_to(padding, y)
-        |> API.line_to(width - padding, y)
-        |> API.stroke()
-        |> API.set_fill_style("#6b7280")
-        |> API.set_font("12px sans-serif")
-        |> API.set_text_align("right")
-        |> API.fill_text("#{val}", padding - 8, y + 4)
+        |> Easel.set_stroke_style("#e5e7eb")
+        |> Easel.set_line_width(0.5)
+        |> Easel.begin_path()
+        |> Easel.move_to(padding, y)
+        |> Easel.line_to(width - padding, y)
+        |> Easel.stroke()
+        |> Easel.set_fill_style("#6b7280")
+        |> Easel.set_font("12px sans-serif")
+        |> Easel.set_text_align("right")
+        |> Easel.fill_text("#{val}", padding - 8, y + 4)
       end)
 
     data
@@ -110,18 +109,18 @@ defmodule PhxDemo.Examples do
       color = Enum.at(colors, i)
 
       acc
-      |> API.set_fill_style(color)
-      |> API.fill_rect(x, y, bar_w, bar_h)
-      |> API.set_stroke_style("rgba(0,0,0,0.1)")
-      |> API.set_line_width(1)
-      |> API.stroke_rect(x, y, bar_w, bar_h)
-      |> API.set_fill_style("#374151")
-      |> API.set_font("bold 12px sans-serif")
-      |> API.set_text_align("center")
-      |> API.fill_text("#{value}", x + bar_w / 2, y - 8)
-      |> API.set_fill_style("#6b7280")
-      |> API.set_font("12px sans-serif")
-      |> API.fill_text(label, x + bar_w / 2, height - padding + 20)
+      |> Easel.set_fill_style(color)
+      |> Easel.fill_rect(x, y, bar_w, bar_h)
+      |> Easel.set_stroke_style("rgba(0,0,0,0.1)")
+      |> Easel.set_line_width(1)
+      |> Easel.stroke_rect(x, y, bar_w, bar_h)
+      |> Easel.set_fill_style("#374151")
+      |> Easel.set_font("bold 12px sans-serif")
+      |> Easel.set_text_align("center")
+      |> Easel.fill_text("#{value}", x + bar_w / 2, y - 8)
+      |> Easel.set_fill_style("#6b7280")
+      |> Easel.set_font("12px sans-serif")
+      |> Easel.fill_text(label, x + bar_w / 2, height - padding + 20)
     end)
     |> Easel.render()
   end
@@ -135,8 +134,8 @@ defmodule PhxDemo.Examples do
 
     canvas =
       Easel.new(width, height)
-      |> API.set_fill_style("#0a0a2e")
-      |> API.fill_rect(0, 0, width, height)
+      |> Easel.set_fill_style("#0a0a2e")
+      |> Easel.fill_rect(0, 0, width, height)
 
     canvas =
       Enum.reduce(1..200, canvas, fn _, acc ->
@@ -149,10 +148,10 @@ defmodule PhxDemo.Examples do
           "rgba(#{brightness}, #{brightness}, #{min(255, brightness + 50)}, #{Float.round(:rand.uniform(), 2)})"
 
         acc
-        |> API.begin_path()
-        |> API.arc(x, y, radius, 0, :math.pi() * 2)
-        |> API.set_fill_style(color)
-        |> API.fill()
+        |> Easel.begin_path()
+        |> Easel.arc(x, y, radius, 0, :math.pi() * 2)
+        |> Easel.set_fill_style(color)
+        |> Easel.fill()
       end)
 
     Enum.reduce(1..8, canvas, fn _, acc ->
@@ -160,18 +159,18 @@ defmodule PhxDemo.Examples do
       y = :rand.uniform(height)
 
       acc
-      |> API.save()
-      |> API.set_global_alpha(0.3)
-      |> API.begin_path()
-      |> API.arc(x, y, 8, 0, :math.pi() * 2)
-      |> API.set_fill_style("rgba(200, 200, 255, 0.3)")
-      |> API.fill()
-      |> API.set_global_alpha(1.0)
-      |> API.begin_path()
-      |> API.arc(x, y, 2, 0, :math.pi() * 2)
-      |> API.set_fill_style("white")
-      |> API.fill()
-      |> API.restore()
+      |> Easel.save()
+      |> Easel.set_global_alpha(0.3)
+      |> Easel.begin_path()
+      |> Easel.arc(x, y, 8, 0, :math.pi() * 2)
+      |> Easel.set_fill_style("rgba(200, 200, 255, 0.3)")
+      |> Easel.fill()
+      |> Easel.set_global_alpha(1.0)
+      |> Easel.begin_path()
+      |> Easel.arc(x, y, 2, 0, :math.pi() * 2)
+      |> Easel.set_fill_style("white")
+      |> Easel.fill()
+      |> Easel.restore()
     end)
     |> Easel.render()
   end
@@ -188,10 +187,10 @@ defmodule PhxDemo.Examples do
 
     canvas =
       Easel.new(width, height)
-      |> API.set_fill_style("#111")
-      |> API.fill_rect(0, 0, width, height)
-      |> API.set_line_width(2)
-      |> API.set_line_cap("round")
+      |> Easel.set_fill_style("#111")
+      |> Easel.fill_rect(0, 0, width, height)
+      |> Easel.set_line_width(2)
+      |> Easel.set_line_cap("round")
 
     Enum.reduce(0..points, canvas, fn i, acc ->
       t = i / points
@@ -203,17 +202,17 @@ defmodule PhxDemo.Examples do
       color = "hsl(#{hue}, 80%, 60%)"
 
       if i == 0 do
-        acc |> API.begin_path() |> API.move_to(x, y)
+        acc |> Easel.begin_path() |> Easel.move_to(x, y)
       else
         acc
-        |> API.set_stroke_style(color)
-        |> API.begin_path()
-        |> API.move_to(
+        |> Easel.set_stroke_style(color)
+        |> Easel.begin_path()
+        |> Easel.move_to(
           cx + (t - 1 / points) * 200 * :math.cos(angle - turns * 2 * :math.pi() / points),
           cy + (t - 1 / points) * 200 * :math.sin(angle - turns * 2 * :math.pi() / points)
         )
-        |> API.line_to(x, y)
-        |> API.stroke()
+        |> Easel.line_to(x, y)
+        |> Easel.stroke()
       end
     end)
     |> Easel.render()
@@ -228,10 +227,10 @@ defmodule PhxDemo.Examples do
 
     canvas =
       Easel.new(width, height)
-      |> API.set_fill_style("#87CEEB")
-      |> API.fill_rect(0, 0, width, height)
-      |> API.set_fill_style("#3d5a1e")
-      |> API.fill_rect(0, height - 40, width, 40)
+      |> Easel.set_fill_style("#87CEEB")
+      |> Easel.fill_rect(0, 0, width, height)
+      |> Easel.set_fill_style("#3d5a1e")
+      |> Easel.fill_rect(0, height - 40, width, 40)
 
     draw_tree(canvas, width / 2, height - 40, 100, -:math.pi() / 2, 0, 10)
     |> Easel.render()
@@ -251,23 +250,23 @@ defmodule PhxDemo.Examples do
 
     canvas =
       canvas
-      |> API.begin_path()
-      |> API.move_to(x, y)
-      |> API.line_to(end_x, end_y)
-      |> API.set_stroke_style("rgb(#{r}, #{g}, #{b})")
-      |> API.set_line_width(line_w)
-      |> API.set_line_cap("round")
-      |> API.stroke()
+      |> Easel.begin_path()
+      |> Easel.move_to(x, y)
+      |> Easel.line_to(end_x, end_y)
+      |> Easel.set_stroke_style("rgb(#{r}, #{g}, #{b})")
+      |> Easel.set_line_width(line_w)
+      |> Easel.set_line_cap("round")
+      |> Easel.stroke()
 
     canvas =
       if depth >= max_depth - 2 do
         size = 3 + :rand.uniform(4)
 
         canvas
-        |> API.begin_path()
-        |> API.arc(end_x, end_y, size, 0, :math.pi() * 2)
-        |> API.set_fill_style("rgba(34, #{100 + :rand.uniform(100)}, 34, 0.6)")
-        |> API.fill()
+        |> Easel.begin_path()
+        |> Easel.arc(end_x, end_y, size, 0, :math.pi() * 2)
+        |> Easel.set_fill_style("rgba(34, #{100 + :rand.uniform(100)}, 34, 0.6)")
+        |> Easel.fill()
       else
         canvas
       end
@@ -289,8 +288,8 @@ defmodule PhxDemo.Examples do
 
     canvas =
       Easel.new(width, height)
-      |> API.set_fill_style("#ecf0f1")
-      |> API.fill_rect(0, 0, width, height)
+      |> Easel.set_fill_style("#ecf0f1")
+      |> Easel.fill_rect(0, 0, width, height)
 
     mondrian_split(canvas, 0, 0, width, height, 0)
     |> Easel.render()
@@ -303,11 +302,11 @@ defmodule PhxDemo.Examples do
     color = Enum.random(@mondrian_colors)
 
     canvas
-    |> API.set_fill_style(color)
-    |> API.fill_rect(x + @line_width / 2, y + @line_width / 2, w - @line_width, h - @line_width)
-    |> API.set_stroke_style("#2c3e50")
-    |> API.set_line_width(@line_width)
-    |> API.stroke_rect(x, y, w, h)
+    |> Easel.set_fill_style(color)
+    |> Easel.fill_rect(x + @line_width / 2, y + @line_width / 2, w - @line_width, h - @line_width)
+    |> Easel.set_stroke_style("#2c3e50")
+    |> Easel.set_line_width(@line_width)
+    |> Easel.stroke_rect(x, y, w, h)
   end
 
   defp mondrian_split(canvas, x, y, w, h, depth) do
@@ -338,9 +337,9 @@ defmodule PhxDemo.Examples do
 
     canvas =
       Easel.new(width, height)
-      |> API.set_fill_style("#0d1117")
-      |> API.fill_rect(0, 0, width, height)
-      |> API.set_fill_style("#58a6ff")
+      |> Easel.set_fill_style("#0d1117")
+      |> Easel.fill_rect(0, 0, width, height)
+      |> Easel.set_fill_style("#58a6ff")
 
     sierpinski_tri(
       canvas,
@@ -359,12 +358,12 @@ defmodule PhxDemo.Examples do
 
   defp sierpinski_tri(canvas, ax, ay, bx, by, cx, cy, 1) do
     canvas
-    |> API.begin_path()
-    |> API.move_to(ax, ay)
-    |> API.line_to(bx, by)
-    |> API.line_to(cx, cy)
-    |> API.close_path()
-    |> API.fill()
+    |> Easel.begin_path()
+    |> Easel.move_to(ax, ay)
+    |> Easel.line_to(bx, by)
+    |> Easel.line_to(cx, cy)
+    |> Easel.close_path()
+    |> Easel.fill()
   end
 
   defp sierpinski_tri(canvas, ax, ay, bx, by, cx, cy, depth) do
@@ -403,8 +402,8 @@ defmodule PhxDemo.Examples do
         color = mandelbrot_color(n, max_iter)
 
         acc2
-        |> API.set_fill_style(color)
-        |> API.fill_rect(px, py, 1, 1)
+        |> Easel.set_fill_style(color)
+        |> Easel.fill_rect(px, py, 1, 1)
       end)
     end)
     |> Easel.render()
@@ -459,20 +458,20 @@ defmodule PhxDemo.Examples do
 
   defp clock_face(canvas, cx, cy, radius) do
     canvas
-    |> API.set_fill_style("#1a1a2e")
-    |> API.fill_rect(0, 0, cx * 2, cy * 2)
-    |> API.begin_path()
-    |> API.arc(cx, cy, radius, 0, :math.pi() * 2)
-    |> API.set_fill_style("#16213e")
-    |> API.fill()
-    |> API.set_stroke_style("#e94560")
-    |> API.set_line_width(4)
-    |> API.stroke()
-    |> API.begin_path()
-    |> API.arc(cx, cy, radius - 10, 0, :math.pi() * 2)
-    |> API.set_stroke_style("rgba(233, 69, 96, 0.3)")
-    |> API.set_line_width(1)
-    |> API.stroke()
+    |> Easel.set_fill_style("#1a1a2e")
+    |> Easel.fill_rect(0, 0, cx * 2, cy * 2)
+    |> Easel.begin_path()
+    |> Easel.arc(cx, cy, radius, 0, :math.pi() * 2)
+    |> Easel.set_fill_style("#16213e")
+    |> Easel.fill()
+    |> Easel.set_stroke_style("#e94560")
+    |> Easel.set_line_width(4)
+    |> Easel.stroke()
+    |> Easel.begin_path()
+    |> Easel.arc(cx, cy, radius - 10, 0, :math.pi() * 2)
+    |> Easel.set_stroke_style("rgba(233, 69, 96, 0.3)")
+    |> Easel.set_line_width(1)
+    |> Easel.stroke()
   end
 
   defp clock_markers(canvas, cx, cy, radius) do
@@ -484,13 +483,13 @@ defmodule PhxDemo.Examples do
       width = if is_quarter, do: 3, else: 1.5
 
       acc
-      |> API.begin_path()
-      |> API.move_to(cx + inner_r * :math.cos(angle), cy + inner_r * :math.sin(angle))
-      |> API.line_to(cx + outer_r * :math.cos(angle), cy + outer_r * :math.sin(angle))
-      |> API.set_stroke_style(if(is_quarter, do: "#e94560", else: "#a0a0b0"))
-      |> API.set_line_width(width)
-      |> API.set_line_cap("round")
-      |> API.stroke()
+      |> Easel.begin_path()
+      |> Easel.move_to(cx + inner_r * :math.cos(angle), cy + inner_r * :math.sin(angle))
+      |> Easel.line_to(cx + outer_r * :math.cos(angle), cy + outer_r * :math.sin(angle))
+      |> Easel.set_stroke_style(if(is_quarter, do: "#e94560", else: "#a0a0b0"))
+      |> Easel.set_line_width(width)
+      |> Easel.set_line_cap("round")
+      |> Easel.stroke()
     end)
   end
 
@@ -500,11 +499,11 @@ defmodule PhxDemo.Examples do
       text_r = radius - 45
 
       acc
-      |> API.set_fill_style("#e0e0e0")
-      |> API.set_font("bold 20px sans-serif")
-      |> API.set_text_align("center")
-      |> API.set_text_baseline("middle")
-      |> API.fill_text("#{i}", cx + text_r * :math.cos(angle), cy + text_r * :math.sin(angle))
+      |> Easel.set_fill_style("#e0e0e0")
+      |> Easel.set_font("bold 20px sans-serif")
+      |> Easel.set_text_align("center")
+      |> Easel.set_text_baseline("middle")
+      |> Easel.fill_text("#{i}", cx + text_r * :math.cos(angle), cy + text_r * :math.sin(angle))
     end)
   end
 
@@ -515,45 +514,45 @@ defmodule PhxDemo.Examples do
 
     canvas
     # Hour
-    |> API.begin_path()
-    |> API.move_to(cx - 15 * :math.cos(hour_angle), cy - 15 * :math.sin(hour_angle))
-    |> API.line_to(cx + 95 * :math.cos(hour_angle), cy + 95 * :math.sin(hour_angle))
-    |> API.set_stroke_style("#e0e0e0")
-    |> API.set_line_width(6)
-    |> API.set_line_cap("round")
-    |> API.stroke()
+    |> Easel.begin_path()
+    |> Easel.move_to(cx - 15 * :math.cos(hour_angle), cy - 15 * :math.sin(hour_angle))
+    |> Easel.line_to(cx + 95 * :math.cos(hour_angle), cy + 95 * :math.sin(hour_angle))
+    |> Easel.set_stroke_style("#e0e0e0")
+    |> Easel.set_line_width(6)
+    |> Easel.set_line_cap("round")
+    |> Easel.stroke()
     # Minute
-    |> API.begin_path()
-    |> API.move_to(cx - 20 * :math.cos(minute_angle), cy - 20 * :math.sin(minute_angle))
-    |> API.line_to(cx + 130 * :math.cos(minute_angle), cy + 130 * :math.sin(minute_angle))
-    |> API.set_stroke_style("#e0e0e0")
-    |> API.set_line_width(3)
-    |> API.set_line_cap("round")
-    |> API.stroke()
+    |> Easel.begin_path()
+    |> Easel.move_to(cx - 20 * :math.cos(minute_angle), cy - 20 * :math.sin(minute_angle))
+    |> Easel.line_to(cx + 130 * :math.cos(minute_angle), cy + 130 * :math.sin(minute_angle))
+    |> Easel.set_stroke_style("#e0e0e0")
+    |> Easel.set_line_width(3)
+    |> Easel.set_line_cap("round")
+    |> Easel.stroke()
     # Second
-    |> API.begin_path()
-    |> API.move_to(cx - 25 * :math.cos(second_angle), cy - 25 * :math.sin(second_angle))
-    |> API.line_to(cx + 140 * :math.cos(second_angle), cy + 140 * :math.sin(second_angle))
-    |> API.set_stroke_style("#e94560")
-    |> API.set_line_width(1.5)
-    |> API.set_line_cap("round")
-    |> API.stroke()
+    |> Easel.begin_path()
+    |> Easel.move_to(cx - 25 * :math.cos(second_angle), cy - 25 * :math.sin(second_angle))
+    |> Easel.line_to(cx + 140 * :math.cos(second_angle), cy + 140 * :math.sin(second_angle))
+    |> Easel.set_stroke_style("#e94560")
+    |> Easel.set_line_width(1.5)
+    |> Easel.set_line_cap("round")
+    |> Easel.stroke()
   end
 
   defp clock_center(canvas, cx, cy, hours, minutes, seconds) do
     canvas
-    |> API.begin_path()
-    |> API.arc(cx, cy, 6, 0, :math.pi() * 2)
-    |> API.set_fill_style("#e94560")
-    |> API.fill()
-    |> API.begin_path()
-    |> API.arc(cx, cy, 3, 0, :math.pi() * 2)
-    |> API.set_fill_style("#1a1a2e")
-    |> API.fill()
-    |> API.set_fill_style("rgba(233, 69, 96, 0.8)")
-    |> API.set_font("14px monospace")
-    |> API.set_text_align("center")
-    |> API.fill_text(
+    |> Easel.begin_path()
+    |> Easel.arc(cx, cy, 6, 0, :math.pi() * 2)
+    |> Easel.set_fill_style("#e94560")
+    |> Easel.fill()
+    |> Easel.begin_path()
+    |> Easel.arc(cx, cy, 3, 0, :math.pi() * 2)
+    |> Easel.set_fill_style("#1a1a2e")
+    |> Easel.fill()
+    |> Easel.set_fill_style("rgba(233, 69, 96, 0.8)")
+    |> Easel.set_font("14px monospace")
+    |> Easel.set_text_align("center")
+    |> Easel.fill_text(
       "#{String.pad_leading("#{hours}", 2, "0")}:#{String.pad_leading("#{minutes}", 2, "0")}:#{String.pad_leading("#{seconds}", 2, "0")} UTC",
       cx,
       cy + 55
@@ -702,8 +701,8 @@ defmodule PhxDemo.Examples do
   def boids_render(boids) do
     canvas =
       Easel.new(@boids_width, @boids_height)
-      |> API.set_fill_style("#0a0a2e")
-      |> API.fill_rect(0, 0, @boids_width, @boids_height)
+      |> Easel.set_fill_style("#0a0a2e")
+      |> Easel.fill_rect(0, 0, @boids_width, @boids_height)
 
     # Group boids into 36 hue buckets (10° each)
     buckets =
@@ -713,8 +712,8 @@ defmodule PhxDemo.Examples do
       end)
 
     Enum.reduce(buckets, canvas, fn {hue, group}, acc ->
-      acc = API.set_fill_style(acc, "hsl(#{hue}, 70%, 60%)")
-      acc = API.begin_path(acc)
+      acc = Easel.set_fill_style(acc, "hsl(#{hue}, 70%, 60%)")
+      acc = Easel.begin_path(acc)
 
       acc =
         Enum.reduce(group, acc, fn boid, acc ->
@@ -728,13 +727,13 @@ defmodule PhxDemo.Examples do
           y3 = boid.y + :math.sin(angle - 2.5) * size
 
           acc
-          |> API.move_to(x1, y1)
-          |> API.line_to(x2, y2)
-          |> API.line_to(x3, y3)
-          |> API.close_path()
+          |> Easel.move_to(x1, y1)
+          |> Easel.line_to(x2, y2)
+          |> Easel.line_to(x3, y3)
+          |> Easel.close_path()
         end)
 
-      API.fill(acc)
+      Easel.fill(acc)
     end)
     |> Easel.render()
   end

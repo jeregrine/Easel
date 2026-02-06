@@ -1,7 +1,6 @@
 # Bar chart — Elixir popularity by year (fictional data)
 # Run: mix run examples/chart.exs
 
-alias Easel.API
 
 width = 600
 height = 400
@@ -30,21 +29,21 @@ colors = ["#6366f1", "#8b5cf6", "#a78bfa", "#c084fc", "#d946ef", "#ec4899", "#f4
 canvas =
   Easel.new(width, height)
   # Background
-  |> API.set_fill_style("#fafafa")
-  |> API.fill_rect(0, 0, width, height)
+  |> Easel.set_fill_style("#fafafa")
+  |> Easel.fill_rect(0, 0, width, height)
   # Title
-  |> API.set_fill_style("#1f2937")
-  |> API.set_font("bold 18px sans-serif")
-  |> API.set_text_align("center")
-  |> API.fill_text("Elixir Popularity Index", width / 2, 30)
+  |> Easel.set_fill_style("#1f2937")
+  |> Easel.set_font("bold 18px sans-serif")
+  |> Easel.set_text_align("center")
+  |> Easel.fill_text("Elixir Popularity Index", width / 2, 30)
   # Axes
-  |> API.set_stroke_style("#9ca3af")
-  |> API.set_line_width(1)
-  |> API.begin_path()
-  |> API.move_to(padding, padding)
-  |> API.line_to(padding, height - padding)
-  |> API.line_to(width - padding, height - padding)
-  |> API.stroke()
+  |> Easel.set_stroke_style("#9ca3af")
+  |> Easel.set_line_width(1)
+  |> Easel.begin_path()
+  |> Easel.move_to(padding, padding)
+  |> Easel.line_to(padding, height - padding)
+  |> Easel.line_to(width - padding, height - padding)
+  |> Easel.stroke()
 
 # Draw grid lines
 canvas =
@@ -53,16 +52,16 @@ canvas =
     val = round(max_val * i / 4)
 
     acc
-    |> API.set_stroke_style("#e5e7eb")
-    |> API.set_line_width(0.5)
-    |> API.begin_path()
-    |> API.move_to(padding, y)
-    |> API.line_to(width - padding, y)
-    |> API.stroke()
-    |> API.set_fill_style("#6b7280")
-    |> API.set_font("12px sans-serif")
-    |> API.set_text_align("right")
-    |> API.fill_text("#{val}", padding - 8, y + 4)
+    |> Easel.set_stroke_style("#e5e7eb")
+    |> Easel.set_line_width(0.5)
+    |> Easel.begin_path()
+    |> Easel.move_to(padding, y)
+    |> Easel.line_to(width - padding, y)
+    |> Easel.stroke()
+    |> Easel.set_fill_style("#6b7280")
+    |> Easel.set_font("12px sans-serif")
+    |> Easel.set_text_align("right")
+    |> Easel.fill_text("#{val}", padding - 8, y + 4)
   end)
 
 # Draw bars
@@ -77,21 +76,21 @@ canvas =
 
     acc
     # Bar
-    |> API.set_fill_style(color)
-    |> API.fill_rect(x, y, bar_w, bar_h)
+    |> Easel.set_fill_style(color)
+    |> Easel.fill_rect(x, y, bar_w, bar_h)
     # Bar border
-    |> API.set_stroke_style("rgba(0,0,0,0.1)")
-    |> API.set_line_width(1)
-    |> API.stroke_rect(x, y, bar_w, bar_h)
+    |> Easel.set_stroke_style("rgba(0,0,0,0.1)")
+    |> Easel.set_line_width(1)
+    |> Easel.stroke_rect(x, y, bar_w, bar_h)
     # Value label
-    |> API.set_fill_style("#374151")
-    |> API.set_font("bold 12px sans-serif")
-    |> API.set_text_align("center")
-    |> API.fill_text("#{value}", x + bar_w / 2, y - 8)
+    |> Easel.set_fill_style("#374151")
+    |> Easel.set_font("bold 12px sans-serif")
+    |> Easel.set_text_align("center")
+    |> Easel.fill_text("#{value}", x + bar_w / 2, y - 8)
     # X-axis label
-    |> API.set_fill_style("#6b7280")
-    |> API.set_font("12px sans-serif")
-    |> API.fill_text(label, x + bar_w / 2, height - padding + 20)
+    |> Easel.set_fill_style("#6b7280")
+    |> Easel.set_font("12px sans-serif")
+    |> Easel.fill_text(label, x + bar_w / 2, height - padding + 20)
   end)
   |> Easel.render()
 

@@ -1,7 +1,6 @@
 # Piet Mondrian–style generative art
 # Run: mix run examples/mondrian.exs
 
-alias Easel.API
 
 width = 500
 height = 500
@@ -14,11 +13,11 @@ defmodule Mondrian do
     color = Enum.random(@colors)
 
     canvas
-    |> Easel.API.set_fill_style(color)
-    |> Easel.API.fill_rect(x + @line_width / 2, y + @line_width / 2, w - @line_width, h - @line_width)
-    |> Easel.API.set_stroke_style("#2c3e50")
-    |> Easel.API.set_line_width(@line_width)
-    |> Easel.API.stroke_rect(x, y, w, h)
+    |> Easel.set_fill_style(color)
+    |> Easel.fill_rect(x + @line_width / 2, y + @line_width / 2, w - @line_width, h - @line_width)
+    |> Easel.set_stroke_style("#2c3e50")
+    |> Easel.set_line_width(@line_width)
+    |> Easel.stroke_rect(x, y, w, h)
   end
 
   def generate(canvas, x, y, w, h, depth) do
@@ -44,8 +43,8 @@ end
 
 canvas =
   Easel.new(width, height)
-  |> API.set_fill_style("#ecf0f1")
-  |> API.fill_rect(0, 0, width, height)
+  |> Easel.set_fill_style("#ecf0f1")
+  |> Easel.fill_rect(0, 0, width, height)
 
 canvas =
   Mondrian.generate(canvas, 0, 0, width, height, 0)

@@ -1,4 +1,4 @@
-# Benchmark the compilation of the Easel.API module, which includes:
+# Benchmark the compilation of the Easel module, which includes:
 # - Parsing the WebIDL file
 # - Reading/decoding the compat JSON
 # - Metaprogramming to generate all function definitions
@@ -9,10 +9,10 @@ compat_source = File.read!(Path.join(:code.priv_dir(:easel), "compat.json"))
 
 Benchee.run(
   %{
-    "full API module compile" => fn ->
-      :code.purge(Easel.API)
-      :code.delete(Easel.API)
-      Code.compile_file("lib/api.ex")
+    "full Easel module compile" => fn ->
+      :code.purge(Easel)
+      :code.delete(Easel)
+      Code.compile_file("lib/easel.ex")
     end,
     "WebIDL parse only" => fn ->
       Easel.WebIDL.members_by_name(webidl_source)

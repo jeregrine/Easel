@@ -1,34 +1,33 @@
 # Smiley face
 # Run: mix run examples/smiley.exs
 
-alias Easel.API
 
 canvas =
   Easel.new(300, 300)
   # Face
-  |> API.begin_path()
-  |> API.arc(150, 150, 100, 0, :math.pi() * 2)
-  |> API.set_fill_style("#FFD700")
-  |> API.fill()
-  |> API.set_stroke_style("#333")
-  |> API.set_line_width(3)
-  |> API.stroke()
+  |> Easel.begin_path()
+  |> Easel.arc(150, 150, 100, 0, :math.pi() * 2)
+  |> Easel.set_fill_style("#FFD700")
+  |> Easel.fill()
+  |> Easel.set_stroke_style("#333")
+  |> Easel.set_line_width(3)
+  |> Easel.stroke()
   # Left eye
-  |> API.begin_path()
-  |> API.arc(115, 120, 15, 0, :math.pi() * 2)
-  |> API.set_fill_style("#333")
-  |> API.fill()
+  |> Easel.begin_path()
+  |> Easel.arc(115, 120, 15, 0, :math.pi() * 2)
+  |> Easel.set_fill_style("#333")
+  |> Easel.fill()
   # Right eye
-  |> API.begin_path()
-  |> API.arc(185, 120, 15, 0, :math.pi() * 2)
-  |> API.fill()
+  |> Easel.begin_path()
+  |> Easel.arc(185, 120, 15, 0, :math.pi() * 2)
+  |> Easel.fill()
   # Smile
-  |> API.begin_path()
-  |> API.arc(150, 155, 60, 0.2, :math.pi() - 0.2)
-  |> API.set_stroke_style("#333")
-  |> API.set_line_width(4)
-  |> API.set_line_cap("round")
-  |> API.stroke()
+  |> Easel.begin_path()
+  |> Easel.arc(150, 155, 60, 0.2, :math.pi() - 0.2)
+  |> Easel.set_stroke_style("#333")
+  |> Easel.set_line_width(4)
+  |> Easel.set_line_cap("round")
+  |> Easel.stroke()
   |> Easel.render()
 
 if Code.ensure_loaded?(Easel.WX) and Easel.WX.available?() do

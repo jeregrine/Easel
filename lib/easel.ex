@@ -2,18 +2,22 @@ defmodule Easel do
   @moduledoc """
   Easel lets you build Canvas 2D drawing operations as data.
 
-  Create a canvas, pipe it through `Easel.API` functions to build up
+  Create a canvas, pipe it through drawing functions to build up
   a list of operations, then render to a backend (browser via LiveView,
   native window via wx, or consume the ops list directly).
+
+  All Canvas 2D API functions are available directly on this module as
+  `snake_cased` versions of their JavaScript counterparts. Use `set/3`
+  and `call/3` for properties or methods not yet generated.
 
   ## Example
 
       canvas =
         Easel.new(300, 300)
-        |> Easel.API.set_fill_style("blue")
-        |> Easel.API.fill_rect(0, 0, 100, 100)
-        |> Easel.API.set_line_width(10)
-        |> Easel.API.stroke_rect(100, 100, 100, 100)
+        |> Easel.set_fill_style("blue")
+        |> Easel.fill_rect(0, 0, 100, 100)
+        |> Easel.set_line_width(10)
+        |> Easel.stroke_rect(100, 100, 100, 100)
         |> Easel.render()
 
   The resulting `%Easel{}` struct contains an `ops` list that maps
@@ -30,7 +34,7 @@ defmodule Easel do
       canvas =
         Easel.new(800, 600)
         |> Easel.template(:particle, fn c ->
-          c |> Easel.API.begin_path() |> Easel.API.arc(0, 0, 3, 0, 6.28) |> Easel.API.fill()
+          c |> Easel.begin_path() |> Easel.arc(0, 0, 3, 0, 6.28) |> Easel.fill()
         end)
         |> Easel.instances(:particle, [
           %{x: 100, y: 200, fill: "red"},
@@ -66,12 +70,109 @@ defmodule Easel do
 
   Operations are stored in reverse order for efficient prepend.
   Call `render/1` to finalize the ops list into correct order.
-
-  Most users should use `Easel.API` functions instead of this directly.
   """
   def push_op(%Easel{} = ctx, op) do
     %{ctx | ops: [op | ctx.ops], rendered: false}
   end
+
+  @doc """
+  Sets a Canvas 2D context property.
+
+      Easel.set(canvas, "fillStyle", "blue")
+  """
+  def set(ctx, key, val) do
+    push_op(ctx, ["set", [key, val]])
+  end
+
+  @doc """
+  Calls a Canvas 2D context method with the given arguments.
+
+      Easel.call(canvas, "fillRect", [0, 0, 100, 100])
+  """
+  def call(ctx, op, arguments) do
+    push_op(ctx, [op, arguments])
+  end
+
+  # ── Generated Canvas 2D API ──────────────────────────────────────
+
+  dir = :code.priv_dir(:easel)
+
+  idl =
+    File.read!("#{dir}/easel.webidl")
+    |> Easel.WebIDL.members_by_name()
+
+  %{"data" => bcd} =
+    File.read!("#{dir}/compat.json")
+    |> JSON.decode!()
+
+  @defs bcd
+        |> Enum.reject(fn {func, stuff} ->
+          func == "__compat" ||
+            stuff["__compat"]["status"]["deprecated"] != false ||
+            !Map.has_key?(idl, func)
+        end)
+        |> Enum.flat_map(fn {func, stuff} ->
+          variants = Map.fetch!(idl, func)
+          doc_url = "https://developer.mozilla.org#{stuff["__compat"]["mdn_url"]}"
+
+          case hd(variants)["type"] do
+            "attribute" ->
+              name = String.to_atom("set_" <> Macro.underscore(func))
+              [{:set, name, func, doc_url}]
+
+            "operation" ->
+              name = String.to_atom(Macro.underscore(func))
+
+              clauses =
+                variants
+                |> Enum.flat_map(fn variant ->
+                  args = variant["arguments"]
+
+                  {required, optional} =
+                    Enum.split_while(args, fn a -> !a["optional"] end)
+
+                  for i <- 0..length(optional) do
+                    (required ++ Enum.take(optional, i))
+                    |> Enum.map(fn a ->
+                      Macro.var(String.to_atom(Macro.underscore(a["name"])), __MODULE__)
+                    end)
+                  end
+                end)
+                |> Enum.uniq_by(&length/1)
+                |> Enum.sort_by(&length/1)
+
+              clauses
+              |> Enum.with_index()
+              |> Enum.map(fn {arg_vars, idx} ->
+                url = if idx == 0, do: doc_url, else: nil
+                {:call, name, func, arg_vars, url}
+              end)
+
+            _ ->
+              []
+          end
+        end)
+
+  for d <- @defs do
+    case d do
+      {:set, name, js_name, doc_url} ->
+        @doc doc_url
+        def unquote(name)(ctx, value) do
+          set(ctx, unquote(js_name), value)
+        end
+
+      {:call, name, js_name, arg_vars, doc_url} ->
+        if doc_url do
+          @doc doc_url
+        end
+
+        def unquote(name)(ctx, unquote_splicing(arg_vars)) do
+          call(ctx, unquote(js_name), unquote(arg_vars))
+        end
+    end
+  end
+
+  # ── Templates and Instances ──────────────────────────────────────
 
   @doc """
   Defines a reusable drawing template.
@@ -86,12 +187,12 @@ defmodule Easel do
         Easel.new(800, 600)
         |> Easel.template(:boid, fn c ->
           c
-          |> Easel.API.begin_path()
-          |> Easel.API.move_to(12, 0)
-          |> Easel.API.line_to(-4, -5)
-          |> Easel.API.line_to(-4, 5)
-          |> Easel.API.close_path()
-          |> Easel.API.fill()
+          |> Easel.begin_path()
+          |> Easel.move_to(12, 0)
+          |> Easel.line_to(-4, -5)
+          |> Easel.line_to(-4, 5)
+          |> Easel.close_path()
+          |> Easel.fill()
         end)
   """
   def template(%Easel{} = ctx, name, draw_fn) when is_atom(name) and is_function(draw_fn, 1) do

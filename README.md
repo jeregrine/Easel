@@ -9,10 +9,10 @@ Build a set of draw operations:
 ```elixir
 canvas =
   Easel.new(300, 300)
-  |> Easel.API.set_fill_style("blue")
-  |> Easel.API.fill_rect(0, 0, 100, 100)
-  |> Easel.API.set_line_width(10)
-  |> Easel.API.stroke_rect(100, 100, 100, 100)
+  |> Easel.set_fill_style("blue")
+  |> Easel.fill_rect(0, 0, 100, 100)
+  |> Easel.set_line_width(10)
+  |> Easel.stroke_rect(100, 100, 100, 100)
   |> Easel.render()
 ```
 
@@ -32,8 +32,8 @@ Easel includes an optional Phoenix LiveView component with a colocated runtime h
 def handle_event("draw", _, socket) do
   canvas =
     Easel.new(300, 300)
-    |> Easel.API.set_fill_style("blue")
-    |> Easel.API.fill_rect(0, 0, 100, 100)
+    |> Easel.set_fill_style("blue")
+    |> Easel.fill_rect(0, 0, 100, 100)
     |> Easel.render()
 
   {:noreply, Easel.LiveView.draw(socket, "my-canvas", canvas)}
@@ -125,12 +125,12 @@ canvas =
   Easel.new(800, 600)
   |> Easel.template(:boid, fn c ->
     c
-    |> Easel.API.begin_path()
-    |> Easel.API.move_to(12, 0)
-    |> Easel.API.line_to(-4, -5)
-    |> Easel.API.line_to(-4, 5)
-    |> Easel.API.close_path()
-    |> Easel.API.fill()
+    |> Easel.begin_path()
+    |> Easel.move_to(12, 0)
+    |> Easel.line_to(-4, -5)
+    |> Easel.line_to(-4, 5)
+    |> Easel.close_path()
+    |> Easel.fill()
   end)
   |> Easel.instances(:boid, Enum.map(boids, fn b ->
     angle = :math.atan2(b.vy, b.vx)
@@ -225,11 +225,11 @@ This opens a native desktop window and draws your canvas operations without a br
 
 ```elixir
 Easel.new(400, 300)
-|> Easel.API.set_fill_style("blue")
-|> Easel.API.fill_rect(50, 50, 100, 100)
-|> Easel.API.set_stroke_style("red")
-|> Easel.API.set_line_width(3)
-|> Easel.API.stroke_rect(50, 50, 100, 100)
+|> Easel.set_fill_style("blue")
+|> Easel.fill_rect(50, 50, 100, 100)
+|> Easel.set_stroke_style("red")
+|> Easel.set_line_width(3)
+|> Easel.stroke_rect(50, 50, 100, 100)
 |> Easel.render()
 |> Easel.WX.render(title: "My Drawing")
 ```

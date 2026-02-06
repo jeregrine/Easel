@@ -1,7 +1,6 @@
 # Recursive fractal tree
 # Run: mix run examples/tree.exs
 
-alias Easel.API
 
 width = 600
 height = 500
@@ -23,13 +22,13 @@ defmodule Tree do
 
     canvas =
       canvas
-      |> Easel.API.begin_path()
-      |> Easel.API.move_to(x, y)
-      |> Easel.API.line_to(end_x, end_y)
-      |> Easel.API.set_stroke_style("rgb(#{r}, #{g}, #{b})")
-      |> Easel.API.set_line_width(line_w)
-      |> Easel.API.set_line_cap("round")
-      |> Easel.API.stroke()
+      |> Easel.begin_path()
+      |> Easel.move_to(x, y)
+      |> Easel.line_to(end_x, end_y)
+      |> Easel.set_stroke_style("rgb(#{r}, #{g}, #{b})")
+      |> Easel.set_line_width(line_w)
+      |> Easel.set_line_cap("round")
+      |> Easel.stroke()
 
     # Add leaves at the tips
     canvas =
@@ -37,10 +36,10 @@ defmodule Tree do
         size = 3 + :rand.uniform(4)
 
         canvas
-        |> Easel.API.begin_path()
-        |> Easel.API.arc(end_x, end_y, size, 0, :math.pi() * 2)
-        |> Easel.API.set_fill_style("rgba(34, #{100 + :rand.uniform(100)}, 34, 0.6)")
-        |> Easel.API.fill()
+        |> Easel.begin_path()
+        |> Easel.arc(end_x, end_y, size, 0, :math.pi() * 2)
+        |> Easel.set_fill_style("rgba(34, #{100 + :rand.uniform(100)}, 34, 0.6)")
+        |> Easel.fill()
       else
         canvas
       end
@@ -59,11 +58,11 @@ end
 
 canvas =
   Easel.new(width, height)
-  |> API.set_fill_style("#87CEEB")
-  |> API.fill_rect(0, 0, width, height)
+  |> Easel.set_fill_style("#87CEEB")
+  |> Easel.fill_rect(0, 0, width, height)
   # Ground
-  |> API.set_fill_style("#3d5a1e")
-  |> API.fill_rect(0, height - 40, width, 40)
+  |> Easel.set_fill_style("#3d5a1e")
+  |> Easel.fill_rect(0, height - 40, width, 40)
 
 canvas =
   Tree.draw(canvas, width / 2, height - 40, 100, -:math.pi() / 2, 0, 10)

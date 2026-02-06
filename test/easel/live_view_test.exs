@@ -145,8 +145,8 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       test "pushes a draw event with ops", %{socket: socket} do
         canvas =
           Easel.new(300, 300)
-          |> Easel.API.set_fill_style("blue")
-          |> Easel.API.fill_rect(0, 0, 100, 100)
+          |> Easel.set_fill_style("blue")
+          |> Easel.fill_rect(0, 0, 100, 100)
 
         socket = Easel.LiveView.draw(socket, "my-canvas", canvas)
         events = socket.private.live_temp[:push_events]
@@ -162,7 +162,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       test "pushes clear then draw with clear: true", %{socket: socket} do
         canvas =
           Easel.new(100, 100)
-          |> Easel.API.fill_rect(0, 0, 50, 50)
+          |> Easel.fill_rect(0, 0, 50, 50)
 
         socket = Easel.LiveView.draw(socket, "c1", canvas, clear: true)
         events = socket.private.live_temp[:push_events]
@@ -177,9 +177,9 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       test "renders ops from Easel.render", %{socket: socket} do
         canvas =
           Easel.new(100, 100)
-          |> Easel.API.begin_path()
-          |> Easel.API.arc(50, 50, 25, 0, 6.28)
-          |> Easel.API.fill()
+          |> Easel.begin_path()
+          |> Easel.arc(50, 50, 25, 0, 6.28)
+          |> Easel.fill()
 
         socket = Easel.LiveView.draw(socket, "c1", canvas)
         [["easel:c1:draw", %{ops: ops}]] = socket.private.live_temp[:push_events]
@@ -219,7 +219,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
 
       test "stores animation state in assigns", %{socket: socket} do
         tick_fn = fn count ->
-          canvas = Easel.new(100, 100) |> Easel.API.fill_rect(0, 0, count, count)
+          canvas = Easel.new(100, 100) |> Easel.fill_rect(0, 0, count, count)
           {canvas, count + 1}
         end
 
@@ -244,7 +244,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       test "animate with canvas_assign", %{socket: socket} do
         socket = assign(socket, :canvas, nil)
         tick_fn = fn count ->
-          canvas = Easel.new(100, 100) |> Easel.API.fill_rect(0, 0, count, count)
+          canvas = Easel.new(100, 100) |> Easel.fill_rect(0, 0, count, count)
           {canvas, count + 1}
         end
 
@@ -256,7 +256,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
 
       test "tick calls tick_fn and updates state", %{socket: socket} do
         tick_fn = fn count ->
-          canvas = Easel.new(100, 100) |> Easel.API.fill_rect(0, 0, count, count)
+          canvas = Easel.new(100, 100) |> Easel.fill_rect(0, 0, count, count)
           {canvas, count + 1}
         end
 
@@ -270,7 +270,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       test "tick updates canvas_assign when set", %{socket: socket} do
         socket = assign(socket, :canvas, nil)
         tick_fn = fn count ->
-          canvas = Easel.new(100, 100) |> Easel.API.fill_rect(0, 0, count, count)
+          canvas = Easel.new(100, 100) |> Easel.fill_rect(0, 0, count, count)
           {canvas, count + 1}
         end
 
@@ -292,7 +292,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
 
       test "tick does nothing when stopped", %{socket: socket} do
         tick_fn = fn count ->
-          {Easel.new(10, 10) |> Easel.API.fill_rect(0, 0, 10, 10), count + 1}
+          {Easel.new(10, 10) |> Easel.fill_rect(0, 0, 10, 10), count + 1}
         end
 
         socket = Easel.LiveView.animate(socket, "c1", :counter, tick_fn)
@@ -374,7 +374,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
         canvas =
           Easel.new(100, 100)
           |> Easel.template(:dot, fn c ->
-            c |> Easel.API.begin_path() |> Easel.API.fill()
+            c |> Easel.begin_path() |> Easel.fill()
           end)
           |> Easel.instances(:dot, [%{x: 10, y: 20}])
 
@@ -388,7 +388,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       test "omits templates when none defined", %{socket: socket} do
         canvas =
           Easel.new(100, 100)
-          |> Easel.API.fill_rect(0, 0, 100, 100)
+          |> Easel.fill_rect(0, 0, 100, 100)
 
         socket = Easel.LiveView.draw(socket, "c1", canvas)
         [["easel:c1:draw", payload]] = socket.private.live_temp[:push_events]

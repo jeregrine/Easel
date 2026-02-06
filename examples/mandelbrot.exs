@@ -1,7 +1,6 @@
 # Mandelbrot set rendered pixel-by-pixel
 # Run: mix run examples/mandelbrot.exs
 
-alias Easel.API
 
 width = 200
 height = 200
@@ -55,8 +54,8 @@ canvas =
       color = Mandelbrot.color(n, max_iter)
 
       acc2
-      |> API.set_fill_style(color)
-      |> API.fill_rect(px, py, 1, 1)
+      |> Easel.set_fill_style(color)
+      |> Easel.fill_rect(px, py, 1, 1)
     end)
   end)
   |> Easel.render()

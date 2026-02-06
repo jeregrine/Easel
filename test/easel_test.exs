@@ -89,10 +89,10 @@ defmodule EaselTest do
     test "new |> API calls |> render produces correct ops" do
       canvas =
         Easel.new(300, 300)
-        |> Easel.API.set_fill_style("blue")
-        |> Easel.API.fill_rect(0, 0, 100, 100)
-        |> Easel.API.set_line_width(10)
-        |> Easel.API.stroke_rect(100, 100, 100, 100)
+        |> Easel.set_fill_style("blue")
+        |> Easel.fill_rect(0, 0, 100, 100)
+        |> Easel.set_line_width(10)
+        |> Easel.stroke_rect(100, 100, 100, 100)
         |> Easel.render()
 
       assert %Easel{width: 300, height: 300} = canvas
@@ -109,12 +109,12 @@ defmodule EaselTest do
     test "complex drawing with paths" do
       canvas =
         Easel.new(200, 200)
-        |> Easel.API.save()
-        |> Easel.API.begin_path()
-        |> Easel.API.arc(100, 100, 50, 0, :math.pi() * 2)
-        |> Easel.API.set_fill_style("red")
-        |> Easel.API.fill()
-        |> Easel.API.restore()
+        |> Easel.save()
+        |> Easel.begin_path()
+        |> Easel.arc(100, 100, 50, 0, :math.pi() * 2)
+        |> Easel.set_fill_style("red")
+        |> Easel.fill()
+        |> Easel.restore()
         |> Easel.render()
 
       assert length(canvas.ops) == 6
@@ -125,9 +125,9 @@ defmodule EaselTest do
     test "ops are JSON-serializable" do
       canvas =
         Easel.new(100, 100)
-        |> Easel.API.set_fill_style("blue")
-        |> Easel.API.fill_rect(0, 0, 50, 50)
-        |> Easel.API.set_global_alpha(0.5)
+        |> Easel.set_fill_style("blue")
+        |> Easel.fill_rect(0, 0, 50, 50)
+        |> Easel.set_global_alpha(0.5)
         |> Easel.render()
 
       json = JSON.encode!(canvas.ops)
@@ -142,9 +142,9 @@ defmodule EaselTest do
         Easel.new(100, 100)
         |> Easel.template(:dot, fn c ->
           c
-          |> Easel.API.begin_path()
-          |> Easel.API.arc(0, 0, 5, 0, :math.pi() * 2)
-          |> Easel.API.fill()
+          |> Easel.begin_path()
+          |> Easel.arc(0, 0, 5, 0, :math.pi() * 2)
+          |> Easel.fill()
         end)
 
       assert Map.has_key?(canvas.templates, :dot)
@@ -155,7 +155,7 @@ defmodule EaselTest do
       canvas =
         Easel.new(100, 100)
         |> Easel.template(:dot, fn c ->
-          c |> Easel.API.begin_path() |> Easel.API.arc(0, 0, 5, 0, 6.28) |> Easel.API.fill()
+          c |> Easel.begin_path() |> Easel.arc(0, 0, 5, 0, 6.28) |> Easel.fill()
         end)
         |> Easel.instances(:dot, [%{x: 10, y: 20}, %{x: 30, y: 40}])
         |> Easel.render()
@@ -170,15 +170,15 @@ defmodule EaselTest do
         Easel.new(100, 100)
         |> Easel.template(:tri, fn c ->
           c
-          |> Easel.API.begin_path()
-          |> Easel.API.move_to(0, -5)
-          |> Easel.API.line_to(-5, 5)
-          |> Easel.API.line_to(5, 5)
-          |> Easel.API.close_path()
-          |> Easel.API.fill()
+          |> Easel.begin_path()
+          |> Easel.move_to(0, -5)
+          |> Easel.line_to(-5, 5)
+          |> Easel.line_to(5, 5)
+          |> Easel.close_path()
+          |> Easel.fill()
         end)
-        |> Easel.API.set_fill_style("#000")
-        |> Easel.API.fill_rect(0, 0, 100, 100)
+        |> Easel.set_fill_style("#000")
+        |> Easel.fill_rect(0, 0, 100, 100)
         |> Easel.instances(:tri, [%{x: 50, y: 50, rotate: 1.0, fill: "red"}])
         |> Easel.render()
 
@@ -198,8 +198,8 @@ defmodule EaselTest do
     test "multiple templates on one canvas" do
       canvas =
         Easel.new(100, 100)
-        |> Easel.template(:a, fn c -> Easel.API.fill(c) end)
-        |> Easel.template(:b, fn c -> Easel.API.stroke(c) end)
+        |> Easel.template(:a, fn c -> Easel.fill(c) end)
+        |> Easel.template(:b, fn c -> Easel.stroke(c) end)
 
       assert map_size(canvas.templates) == 2
       assert canvas.templates[:a] == [["fill", []]]
@@ -209,7 +209,7 @@ defmodule EaselTest do
     test "instances with transform options" do
       canvas =
         Easel.new(100, 100)
-        |> Easel.template(:t, fn c -> Easel.API.fill(c) end)
+        |> Easel.template(:t, fn c -> Easel.fill(c) end)
         |> Easel.instances(:t, [
           %{x: 10, y: 20, rotate: 1.5, scale_x: 2.0, scale_y: 0.5, fill: "red", stroke: "blue", alpha: 0.5}
         ])
@@ -230,7 +230,7 @@ defmodule EaselTest do
       canvas =
         Easel.new(100, 100)
         |> Easel.template(:dot, fn c ->
-          c |> Easel.API.begin_path() |> Easel.API.fill()
+          c |> Easel.begin_path() |> Easel.fill()
         end)
         |> Easel.instances(:dot, [%{x: 10, y: 20}, %{x: 30, y: 40}])
         |> Easel.expand()
@@ -250,7 +250,7 @@ defmodule EaselTest do
     test "expand includes style and transform ops" do
       canvas =
         Easel.new(100, 100)
-        |> Easel.template(:t, fn c -> Easel.API.fill(c) end)
+        |> Easel.template(:t, fn c -> Easel.fill(c) end)
         |> Easel.instances(:t, [
           %{x: 5, y: 10, rotate: 1.0, scale_x: 2.0, scale_y: 0.5, fill: "red", alpha: 0.8}
         ])
@@ -271,9 +271,9 @@ defmodule EaselTest do
     test "expand preserves non-instance ops" do
       canvas =
         Easel.new(100, 100)
-        |> Easel.template(:t, fn c -> Easel.API.fill(c) end)
-        |> Easel.API.set_fill_style("blue")
-        |> Easel.API.fill_rect(0, 0, 100, 100)
+        |> Easel.template(:t, fn c -> Easel.fill(c) end)
+        |> Easel.set_fill_style("blue")
+        |> Easel.fill_rect(0, 0, 100, 100)
         |> Easel.instances(:t, [%{x: 50, y: 50}])
         |> Easel.expand()
 
@@ -287,7 +287,7 @@ defmodule EaselTest do
     test "expand on canvas with no instances is a no-op" do
       canvas =
         Easel.new(100, 100)
-        |> Easel.API.fill_rect(0, 0, 100, 100)
+        |> Easel.fill_rect(0, 0, 100, 100)
         |> Easel.expand()
 
       assert [["fillRect", [0, 0, 100, 100]]] = canvas.ops
@@ -296,7 +296,7 @@ defmodule EaselTest do
     test "expand auto-renders if needed" do
       canvas =
         Easel.new(100, 100)
-        |> Easel.template(:t, fn c -> Easel.API.fill(c) end)
+        |> Easel.template(:t, fn c -> Easel.fill(c) end)
         |> Easel.instances(:t, [%{x: 1, y: 2}])
         |> Easel.expand()
 
