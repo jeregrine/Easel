@@ -635,6 +635,9 @@ defmodule Easel.WX do
 
       Enum.reduce(ops, draw_state, &execute_op/2)
 
+      # GC must be destroyed to flush drawing to the bitmap DC before blit
+      :wxGraphicsContext.destroy(gc)
+
       :wxPaintDC.blit(
         panel_dc,
         {0, 0},
@@ -901,14 +904,16 @@ defmodule Easel.WX do
     defp execute_op(["fillText", [text, x, y | _rest]], state) do
       apply_font(state)
       apply_brush(state)
-      :wxGraphicsContext.drawText(state.gc, String.to_charlist(text), to_float(x), to_float(y))
+      {dx, dy} = text_offset(state, text)
+      :wxGraphicsContext.drawText(state.gc, String.to_charlist(text), to_float(x) + dx, to_float(y) + dy)
       state
     end
 
     defp execute_op(["strokeText", [text, x, y | _rest]], state) do
       apply_font(state)
       apply_brush(state)
-      :wxGraphicsContext.drawText(state.gc, String.to_charlist(text), to_float(x), to_float(y))
+      {dx, dy} = text_offset(state, text)
+      :wxGraphicsContext.drawText(state.gc, String.to_charlist(text), to_float(x) + dx, to_float(y) + dy)
       state
     end
 
@@ -924,6 +929,33 @@ defmodule Easel.WX do
 
     defp execute_op([op, _args], _state) do
       raise UnsupportedOpError, op: op
+    end
+
+    # ── Text helpers ────────────────────────────────────────────────
+
+    defp text_offset(state, text) do
+      charlist = String.to_charlist(text)
+      {tw, th, _descent, _leading} = :wxGraphicsContext.getTextExtent(state.gc, charlist)
+
+      dx =
+        case state.text_align do
+          :center -> -tw / 2
+          :right -> -tw
+          :end_ -> -tw
+          _ -> 0.0
+        end
+
+      dy =
+        case state.text_baseline do
+          :middle -> -th / 2
+          :bottom -> -th
+          :alphabetic -> -th * 0.85
+          :ideographic -> -th
+          :hanging -> -th * 0.2
+          _ -> 0.0
+        end
+
+      {dx, dy}
     end
 
     # ── Property setters ────────────────────────────────────────────
