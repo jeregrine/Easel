@@ -556,24 +556,49 @@ defmodule PhxDemo.Examples do
     end
   end
 
+  @cell_size trunc(@perception)
+
   def boids_tick(boids) do
+    grid = boids_build_grid(boids)
+
     Enum.map(boids, fn boid ->
       boid
-      |> boids_apply_rules(boids)
+      |> boids_apply_rules(grid)
       |> boids_limit_speed()
       |> boids_move()
       |> boids_wrap()
     end)
   end
 
-  defp boids_apply_rules(boid, boids) do
+  # Spatial hash grid — only check neighbors in adjacent cells
+  defp boids_build_grid(boids) do
+    Enum.reduce(boids, %{}, fn boid, grid ->
+      key = {trunc(boid.x / @cell_size), trunc(boid.y / @cell_size)}
+      Map.update(grid, key, [boid], &[boid | &1])
+    end)
+  end
+
+  defp boids_neighbors(boid, grid) do
+    cx = trunc(boid.x / @cell_size)
+    cy = trunc(boid.y / @cell_size)
+
+    for dx <- -1..1, dy <- -1..1, reduce: [] do
+      acc -> (Map.get(grid, {cx + dx, cy + dy}, [])) ++ acc
+    end
+  end
+
+  defp boids_apply_rules(boid, grid) do
+    neighbors = boids_neighbors(boid, grid)
+
     {sep_x, sep_y, ali_x, ali_y, coh_x, coh_y, count} =
-      Enum.reduce(boids, {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0}, fn other, {sx, sy, ax, ay, cx, cy, n} ->
+      Enum.reduce(neighbors, {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0}, fn other, {sx, sy, ax, ay, cx, cy, n} ->
         dx = other.x - boid.x
         dy = other.y - boid.y
-        dist = :math.sqrt(dx * dx + dy * dy)
+        dist_sq = dx * dx + dy * dy
 
-        if dist > 0 and dist < @perception do
+        if dist_sq > 0 and dist_sq < @perception * @perception do
+          dist = :math.sqrt(dist_sq)
+
           {sx2, sy2} =
             if dist < @separation_dist do
               {sx - dx / dist, sy - dy / dist}
@@ -588,11 +613,8 @@ defmodule PhxDemo.Examples do
       end)
 
     if count > 0 do
-      # Alignment — steer toward average velocity
       {avx, avy} = boids_steer(boid, ali_x / count, ali_y / count)
-      # Cohesion — steer toward average position
       {cvx, cvy} = boids_steer(boid, coh_x / count - boid.x, coh_y / count - boid.y)
-      # Separation
       {svx, svy} = {sep_x * @max_force * 1.5, sep_y * @max_force * 1.5}
 
       %{boid | vx: boid.vx + svx + avx + cvx, vy: boid.vy + svy + avy + cvy}
@@ -647,31 +669,44 @@ defmodule PhxDemo.Examples do
     end
   end
 
+  # Batch render: group boids by hue bucket, one path + fill per bucket.
+  # Reduces ops from ~7 per boid to ~4 per bucket (much fewer buckets than boids).
   def boids_render(boids) do
     canvas =
       Easel.new(@boids_width, @boids_height)
       |> API.set_fill_style("#0a0a2e")
       |> API.fill_rect(0, 0, @boids_width, @boids_height)
 
-    Enum.reduce(boids, canvas, fn boid, acc ->
-      angle = :math.atan2(boid.vy, boid.vx)
-      size = 6
-      x1 = boid.x + :math.cos(angle) * size * 2
-      y1 = boid.y + :math.sin(angle) * size * 2
-      x2 = boid.x + :math.cos(angle + 2.5) * size
-      y2 = boid.y + :math.sin(angle + 2.5) * size
-      x3 = boid.x + :math.cos(angle - 2.5) * size
-      y3 = boid.y + :math.sin(angle - 2.5) * size
-      hue = round(angle / :math.pi() * 180 + 180)
+    # Group boids into 36 hue buckets (10° each)
+    buckets =
+      Enum.group_by(boids, fn boid ->
+        angle = :math.atan2(boid.vy, boid.vx)
+        div(round(angle / :math.pi() * 180 + 180), 10) * 10
+      end)
 
-      acc
-      |> API.begin_path()
-      |> API.move_to(x1, y1)
-      |> API.line_to(x2, y2)
-      |> API.line_to(x3, y3)
-      |> API.close_path()
-      |> API.set_fill_style("hsl(#{hue}, 70%, 60%)")
-      |> API.fill()
+    Enum.reduce(buckets, canvas, fn {hue, group}, acc ->
+      acc = API.set_fill_style(acc, "hsl(#{hue}, 70%, 60%)")
+      acc = API.begin_path(acc)
+
+      acc =
+        Enum.reduce(group, acc, fn boid, acc ->
+          angle = :math.atan2(boid.vy, boid.vx)
+          size = 6
+          x1 = boid.x + :math.cos(angle) * size * 2
+          y1 = boid.y + :math.sin(angle) * size * 2
+          x2 = boid.x + :math.cos(angle + 2.5) * size
+          y2 = boid.y + :math.sin(angle + 2.5) * size
+          x3 = boid.x + :math.cos(angle - 2.5) * size
+          y3 = boid.y + :math.sin(angle - 2.5) * size
+
+          acc
+          |> API.move_to(x1, y1)
+          |> API.line_to(x2, y2)
+          |> API.line_to(x3, y3)
+          |> API.close_path()
+        end)
+
+      API.fill(acc)
     end)
     |> Easel.render()
   end
