@@ -131,17 +131,19 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       assigns = assign(assigns, :events, Phoenix.json_library().encode!(events))
 
       ~H"""
-      <canvas
-        id={@id}
-        phx-hook=".Easel"
-        width={@width}
-        height={@height}
-        class={@class}
-        tabindex={if @on_key_down, do: "0"}
-        data-ops={Phoenix.json_library().encode!(@ops)}
-        data-events={@events}
-        {@rest}
-      />
+      <div id={"#{@id}-wrapper"} phx-update="ignore">
+        <canvas
+          id={@id}
+          phx-hook=".Easel"
+          width={@width}
+          height={@height}
+          class={@class}
+          tabindex={if @on_key_down, do: "0"}
+          data-ops={Phoenix.json_library().encode!(@ops)}
+          data-events={@events}
+          {@rest}
+        />
+      </div>
       <script :type={ColocatedHook} name=".Easel" runtime>
         {
           canvasXY(e) {
