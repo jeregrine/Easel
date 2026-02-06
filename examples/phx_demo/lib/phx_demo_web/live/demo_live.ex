@@ -39,31 +39,31 @@ defmodule PhxDemoWeb.DemoLive do
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-10 items-start">
         <.example title="Smiley" canvas_id="smiley">
-          <Easel.LiveView.canvas id="smiley" width={200} height={200} ops={@smiley.ops} />
+          <Easel.LiveView.canvas id="smiley" width={300} height={300} ops={@smiley.ops} />
         </.example>
 
         <.example title="Chart" canvas_id="chart">
-          <Easel.LiveView.canvas id="chart" width={300} height={200} ops={@chart.ops} />
+          <Easel.LiveView.canvas id="chart" width={600} height={400} ops={@chart.ops} />
         </.example>
 
         <.example title="Starfield" canvas_id="starfield">
-          <Easel.LiveView.canvas id="starfield" width={300} height={200} ops={@starfield.ops} />
+          <Easel.LiveView.canvas id="starfield" width={600} height={400} ops={@starfield.ops} />
         </.example>
 
         <.example title="Spiral" canvas_id="spiral">
-          <Easel.LiveView.canvas id="spiral" width={250} height={250} ops={@spiral.ops} />
+          <Easel.LiveView.canvas id="spiral" width={500} height={500} ops={@spiral.ops} />
         </.example>
 
         <.example title="Fractal Tree" canvas_id="tree">
-          <Easel.LiveView.canvas id="tree" width={300} height={250} ops={@tree.ops} />
+          <Easel.LiveView.canvas id="tree" width={600} height={500} ops={@tree.ops} />
         </.example>
 
         <.example title="Mondrian" canvas_id="mondrian">
-          <Easel.LiveView.canvas id="mondrian" width={250} height={250} ops={@mondrian.ops} />
+          <Easel.LiveView.canvas id="mondrian" width={500} height={500} ops={@mondrian.ops} />
         </.example>
 
         <.example title="Sierpinski Triangle" canvas_id="sierpinski">
-          <Easel.LiveView.canvas id="sierpinski" width={300} height={260} ops={@sierpinski.ops} />
+          <Easel.LiveView.canvas id="sierpinski" width={600} height={520} ops={@sierpinski.ops} />
         </.example>
 
         <.example title="Mandelbrot Set" canvas_id="mandelbrot">

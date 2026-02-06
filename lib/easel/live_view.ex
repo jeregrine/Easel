@@ -394,27 +394,36 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
 
               // Find the canvas - check for canvas_stack (multiple layers)
               const stack = document.getElementById(canvasId);
-              let canvas;
+              let srcCanvas;
               if (stack && stack.tagName !== "CANVAS") {
                 // canvas_stack — composite all layers onto a temp canvas
                 const layers = stack.querySelectorAll("canvas");
                 if (layers.length === 0) return;
-                const first = layers[0];
-                canvas = document.createElement("canvas");
-                canvas.width = first.width;
-                canvas.height = first.height;
-                const ctx = canvas.getContext("2d");
-                for (const layer of layers) {
-                  ctx.drawImage(layer, 0, 0);
+                srcCanvas = layers[0];
+                if (layers.length > 1) {
+                  const tmp = document.createElement("canvas");
+                  tmp.width = srcCanvas.width;
+                  tmp.height = srcCanvas.height;
+                  const ctx = tmp.getContext("2d");
+                  for (const layer of layers) ctx.drawImage(layer, 0, 0);
+                  srcCanvas = tmp;
                 }
               } else {
-                canvas = stack;
+                srcCanvas = stack;
               }
+              if (!srcCanvas) return;
 
-              if (!canvas) return;
+              // Export at logical (1x) resolution to avoid DPR scaling
+              const logicalW = parseInt(srcCanvas.getAttribute("width")) || srcCanvas.width;
+              const logicalH = parseInt(srcCanvas.getAttribute("height")) || srcCanvas.height;
+              const out = document.createElement("canvas");
+              out.width = logicalW;
+              out.height = logicalH;
+              out.getContext("2d").drawImage(srcCanvas, 0, 0, logicalW, logicalH);
+
               const link = document.createElement("a");
               link.download = filename;
-              link.href = canvas.toDataURL("image/png");
+              link.href = out.toDataURL("image/png");
               link.click();
             });
           }
