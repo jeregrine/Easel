@@ -1,18 +1,26 @@
 defmodule PhxDemoWeb.DemoLive do
   use PhxDemoWeb, :live_view
 
+  @examples [
+    {:smiley, "Smiley", 300, 300},
+    {:chart, "Chart", 600, 400},
+    {:starfield, "Starfield", 600, 400},
+    {:spiral, "Spiral", 500, 500},
+    {:tree, "Fractal Tree", 600, 500},
+    {:mondrian, "Mondrian", 500, 500},
+    {:sierpinski, "Sierpinski Triangle", 600, 520},
+    {:mandelbrot, "Mandelbrot Set", 200, 200}
+  ]
+
   def mount(_params, _session, socket) do
-    {:ok,
-     assign(socket,
-       smiley: PhxDemo.Examples.smiley(),
-       chart: PhxDemo.Examples.chart(),
-       starfield: PhxDemo.Examples.starfield(),
-       spiral: PhxDemo.Examples.spiral(),
-       tree: PhxDemo.Examples.tree(),
-       mondrian: PhxDemo.Examples.mondrian(),
-       sierpinski: PhxDemo.Examples.sierpinski(),
-       mandelbrot: PhxDemo.Examples.mandelbrot()
-     )}
+    socket =
+      Enum.reduce(@examples, socket, fn {key, _title, _w, _h}, socket ->
+        assign_async(socket, key, fn ->
+          {:ok, %{key => apply(PhxDemo.Examples, key, [])}}
+        end)
+      end)
+
+    {:ok, assign(socket, :examples, @examples)}
   end
 
   def render(assigns) do
@@ -42,52 +50,65 @@ defmodule PhxDemoWeb.DemoLive do
       <h2 class="text-xl font-semibold mb-4">Static</h2>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-10 items-start">
-        <.example title="Smiley" canvas_id="smiley">
-          <Easel.LiveView.canvas id="smiley" width={300} height={300} ops={@smiley.ops} />
-        </.example>
-
-        <.example title="Chart" canvas_id="chart">
-          <Easel.LiveView.canvas id="chart" width={600} height={400} ops={@chart.ops} />
-        </.example>
-
-        <.example title="Starfield" canvas_id="starfield">
-          <Easel.LiveView.canvas id="starfield" width={600} height={400} ops={@starfield.ops} />
-        </.example>
-
-        <.example title="Spiral" canvas_id="spiral">
-          <Easel.LiveView.canvas id="spiral" width={500} height={500} ops={@spiral.ops} />
-        </.example>
-
-        <.example title="Fractal Tree" canvas_id="tree">
-          <Easel.LiveView.canvas id="tree" width={600} height={500} ops={@tree.ops} />
-        </.example>
-
-        <.example title="Mondrian" canvas_id="mondrian">
-          <Easel.LiveView.canvas id="mondrian" width={500} height={500} ops={@mondrian.ops} />
-        </.example>
-
-        <.example title="Sierpinski Triangle" canvas_id="sierpinski">
-          <Easel.LiveView.canvas id="sierpinski" width={600} height={520} ops={@sierpinski.ops} />
-        </.example>
-
-        <.example title="Mandelbrot Set" canvas_id="mandelbrot">
-          <Easel.LiveView.canvas id="mandelbrot" width={200} height={200} ops={@mandelbrot.ops} />
-        </.example>
+        <.async_example
+          :for={{key, title, width, height} <- @examples}
+          key={key}
+          title={title}
+          width={width}
+          height={height}
+          result={Map.get(assigns, key)}
+        />
       </div>
     </div>
     """
   end
 
-  defp example(assigns) do
+  attr :key, :atom, required: true
+  attr :title, :string, required: true
+  attr :width, :integer, required: true
+  attr :height, :integer, required: true
+  attr :result, :any, required: true
+
+  defp async_example(%{result: %{ok?: true}} = assigns) do
     ~H"""
     <div class="min-w-0">
       <div class="flex items-center gap-2 mb-2">
-        <h3 class="font-semibold text-lg"><%= @title %></h3>
-        <Easel.LiveView.export_button for={@canvas_id} filename={"#{@canvas_id}.png"} class="text-xs text-gray-400 hover:text-gray-700 cursor-pointer">
+        <h3 class="font-semibold text-lg">{@title}</h3>
+        <Easel.LiveView.export_button for={@key} filename={"#{@key}.png"} class="text-xs text-gray-400 hover:text-gray-700 cursor-pointer">
           📥
         </Easel.LiveView.export_button>
       </div>
-      <%= render_slot(@inner_block) %>
+      <Easel.LiveView.canvas id={@key} width={@width} height={@height} ops={@result.result.ops} />
+    </div>
+    """
+  end
+
+  defp async_example(%{result: %{failed: reason}} = assigns) do
+    assigns = assign(assigns, :reason, inspect(reason))
+
+    ~H"""
+    <div class="min-w-0">
+      <div class="flex items-center gap-2 mb-2">
+        <h3 class="font-semibold text-lg">{@title}</h3>
+      </div>
+      <div class="flex items-center justify-center bg-red-50 text-red-500 text-sm rounded"
+           style={"width: #{@width}px; height: #{@height}px"}>
+        Failed: {@reason}
+      </div>
+    </div>
+    """
+  end
+
+  defp async_example(assigns) do
+    ~H"""
+    <div class="min-w-0">
+      <div class="flex items-center gap-2 mb-2">
+        <h3 class="font-semibold text-lg">{@title}</h3>
+      </div>
+      <div class="flex items-center justify-center bg-gray-100 rounded animate-pulse"
+           style={"width: #{@width}px; height: #{@height}px"}>
+        <span class="text-gray-400 text-sm">Rendering…</span>
+      </div>
     </div>
     """
   end

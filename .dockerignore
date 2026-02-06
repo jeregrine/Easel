@@ -1,0 +1,11 @@
+_build
+deps
+.git
+.gitignore
+doc
+test
+*.tar
+erl_crash.dump
+examples/phx_demo/_build
+examples/phx_demo/deps
+examples/phx_demo/test
