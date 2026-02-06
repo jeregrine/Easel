@@ -1,5 +1,5 @@
 if Code.ensure_loaded?(Phoenix.LiveView) do
-  defmodule Canvas.LiveView do
+  defmodule Easel.LiveView do
     @moduledoc """
     A Phoenix LiveView component for rendering and drawing on an HTML canvas.
 
@@ -22,33 +22,33 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
 
     Render a canvas element in your LiveView template:
 
-        <Canvas.LiveView.canvas id="my-canvas" width={300} height={300} />
+        <Easel.LiveView.canvas id="my-canvas" width={300} height={300} />
 
     Then draw to it from any event handler:
 
         def handle_event("draw", _, socket) do
           canvas =
-            Canvas.new(300, 300)
-            |> Canvas.API.set_fill_style("blue")
-            |> Canvas.API.fill_rect(0, 0, 100, 100)
-            |> Canvas.render()
+            Easel.new(300, 300)
+            |> Easel.API.set_fill_style("blue")
+            |> Easel.API.fill_rect(0, 0, 100, 100)
+            |> Easel.render()
 
-          {:noreply, Canvas.LiveView.draw(socket, "my-canvas", canvas)}
+          {:noreply, Easel.LiveView.draw(socket, "my-canvas", canvas)}
         end
 
     You can also pass initial ops to draw on mount:
 
-        <Canvas.LiveView.canvas id="my-canvas" width={300} height={300} ops={@canvas.ops} />
+        <Easel.LiveView.canvas id="my-canvas" width={300} height={300} ops={@canvas.ops} />
 
     ## Clearing
 
     To clear the canvas before drawing:
 
-        {:noreply, Canvas.LiveView.clear(socket, "my-canvas")}
+        {:noreply, Easel.LiveView.clear(socket, "my-canvas")}
 
     Or clear and draw in one step:
 
-        {:noreply, Canvas.LiveView.draw(socket, "my-canvas", canvas, clear: true)}
+        {:noreply, Easel.LiveView.draw(socket, "my-canvas", canvas, clear: true)}
     """
 
     use Phoenix.Component
@@ -97,10 +97,10 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
                 } else if (typeof ctx[op] === "function") {
                   ctx[op](...args);
                 } else {
-                  console.warn("[Canvas] Unknown operation:", op);
+                  console.warn("[Easel] Unknown operation:", op);
                 }
               } catch (e) {
-                console.error("[Canvas] Error executing op:", op, args, e);
+                console.error("[Easel] Error executing op:", op, args, e);
               }
             }
           },
@@ -112,11 +112,11 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
               this.executeOps(initialOps);
             }
 
-            this.handleEvent(`canvas:${this.el.id}:draw`, ({ ops }) => {
+            this.handleEvent(`easel:${this.el.id}:draw`, ({ ops }) => {
               this.executeOps(ops);
             });
 
-            this.handleEvent(`canvas:${this.el.id}:clear`, () => {
+            this.handleEvent(`easel:${this.el.id}:clear`, () => {
               this.context.clearRect(0, 0, this.el.width, this.el.height);
             });
           }
@@ -132,15 +132,15 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
 
       * `:clear` - if `true`, clears the canvas before drawing (default `false`)
     """
-    def draw(socket, id, %Canvas{} = canvas, opts \\ []) do
-      canvas = Canvas.render(canvas)
+    def draw(socket, id, %Easel{} = canvas, opts \\ []) do
+      canvas = Easel.render(canvas)
 
       if opts[:clear] do
         socket
-        |> Phoenix.LiveView.push_event("canvas:#{id}:clear", %{})
-        |> Phoenix.LiveView.push_event("canvas:#{id}:draw", %{ops: canvas.ops})
+        |> Phoenix.LiveView.push_event("easel:#{id}:clear", %{})
+        |> Phoenix.LiveView.push_event("easel:#{id}:draw", %{ops: canvas.ops})
       else
-        Phoenix.LiveView.push_event(socket, "canvas:#{id}:draw", %{ops: canvas.ops})
+        Phoenix.LiveView.push_event(socket, "easel:#{id}:draw", %{ops: canvas.ops})
       end
     end
 
@@ -148,7 +148,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
     Clears the entire canvas.
     """
     def clear(socket, id) do
-      Phoenix.LiveView.push_event(socket, "canvas:#{id}:clear", %{})
+      Phoenix.LiveView.push_event(socket, "easel:#{id}:clear", %{})
     end
   end
 end

@@ -1,4 +1,4 @@
-defmodule Canvas.WebIDL do
+defmodule Easel.WebIDL do
   @moduledoc """
   A WebIDL parser for Canvas2D using NimbleParsec.
 

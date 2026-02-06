@@ -1,9 +1,9 @@
-defmodule Canvas.MixProject do
+defmodule Easel.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :canvas,
+      app: :easel,
       version: "0.1.0",
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,

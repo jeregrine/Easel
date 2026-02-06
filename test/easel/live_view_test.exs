@@ -1,5 +1,5 @@
 if Code.ensure_loaded?(Phoenix.LiveView) do
-  defmodule Canvas.LiveViewTest do
+  defmodule Easel.LiveViewTest do
     use ExUnit.Case
 
     import Phoenix.Component
@@ -10,7 +10,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
         assigns = %{}
 
         html = rendered_to_string(~H"""
-          <Canvas.LiveView.canvas id="test-canvas" width={300} height={200} />
+          <Easel.LiveView.canvas id="test-canvas" width={300} height={200} />
         """)
 
         assert html =~ ~s(id="test-canvas")
@@ -23,7 +23,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
         assigns = %{}
 
         html = rendered_to_string(~H"""
-          <Canvas.LiveView.canvas id="test-canvas" width={100} height={100} />
+          <Easel.LiveView.canvas id="test-canvas" width={100} height={100} />
         """)
 
         assert html =~ ~s(data-ops="[]")
@@ -35,7 +35,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
         }
 
         html = rendered_to_string(~H"""
-          <Canvas.LiveView.canvas id="test-canvas" width={100} height={100} ops={@ops} />
+          <Easel.LiveView.canvas id="test-canvas" width={100} height={100} ops={@ops} />
         """)
 
         assert html =~ ~s(data-ops=")
@@ -46,7 +46,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
         assigns = %{}
 
         html = rendered_to_string(~H"""
-          <Canvas.LiveView.canvas id="test-canvas" width={100} height={100} class="my-canvas" />
+          <Easel.LiveView.canvas id="test-canvas" width={100} height={100} class="my-canvas" />
         """)
 
         assert html =~ ~s(class="my-canvas")
@@ -56,7 +56,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
         assigns = %{}
 
         html = rendered_to_string(~H"""
-          <Canvas.LiveView.canvas id="test-canvas" width={100} height={100} style="border: 1px solid" />
+          <Easel.LiveView.canvas id="test-canvas" width={100} height={100} style="border: 1px solid" />
         """)
 
         assert html =~ ~s(style="border: 1px solid")
@@ -66,7 +66,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
         assigns = %{}
 
         html = rendered_to_string(~H"""
-          <Canvas.LiveView.canvas id="test-canvas" width={100} height={100} />
+          <Easel.LiveView.canvas id="test-canvas" width={100} height={100} />
         """)
 
         assert html =~ "<script"
@@ -88,14 +88,14 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
 
       test "pushes a draw event with ops", %{socket: socket} do
         canvas =
-          Canvas.new(300, 300)
-          |> Canvas.API.set_fill_style("blue")
-          |> Canvas.API.fill_rect(0, 0, 100, 100)
+          Easel.new(300, 300)
+          |> Easel.API.set_fill_style("blue")
+          |> Easel.API.fill_rect(0, 0, 100, 100)
 
-        socket = Canvas.LiveView.draw(socket, "my-canvas", canvas)
+        socket = Easel.LiveView.draw(socket, "my-canvas", canvas)
         events = socket.private.live_temp[:push_events]
 
-        assert [["canvas:my-canvas:draw", %{ops: ops}]] = events
+        assert [["easel:my-canvas:draw", %{ops: ops}]] = events
 
         assert [
                  ["set", ["fillStyle", "blue"]],
@@ -105,28 +105,28 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
 
       test "pushes clear then draw with clear: true", %{socket: socket} do
         canvas =
-          Canvas.new(100, 100)
-          |> Canvas.API.fill_rect(0, 0, 50, 50)
+          Easel.new(100, 100)
+          |> Easel.API.fill_rect(0, 0, 50, 50)
 
-        socket = Canvas.LiveView.draw(socket, "c1", canvas, clear: true)
+        socket = Easel.LiveView.draw(socket, "c1", canvas, clear: true)
         events = socket.private.live_temp[:push_events]
 
         # push_event prepends, so order is reversed in the list
         assert [
-                 ["canvas:c1:draw", %{ops: [["fillRect", [0, 0, 50, 50]]]}],
-                 ["canvas:c1:clear", %{}]
+                 ["easel:c1:draw", %{ops: [["fillRect", [0, 0, 50, 50]]]}],
+                 ["easel:c1:clear", %{}]
                ] = events
       end
 
-      test "renders ops from Canvas.render", %{socket: socket} do
+      test "renders ops from Easel.render", %{socket: socket} do
         canvas =
-          Canvas.new(100, 100)
-          |> Canvas.API.begin_path()
-          |> Canvas.API.arc(50, 50, 25, 0, 6.28)
-          |> Canvas.API.fill()
+          Easel.new(100, 100)
+          |> Easel.API.begin_path()
+          |> Easel.API.arc(50, 50, 25, 0, 6.28)
+          |> Easel.API.fill()
 
-        socket = Canvas.LiveView.draw(socket, "c1", canvas)
-        [["canvas:c1:draw", %{ops: ops}]] = socket.private.live_temp[:push_events]
+        socket = Easel.LiveView.draw(socket, "c1", canvas)
+        [["easel:c1:draw", %{ops: ops}]] = socket.private.live_temp[:push_events]
 
         assert [
                  ["beginPath", []],
@@ -143,10 +143,10 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
           endpoint: nil
         }
 
-        socket = Canvas.LiveView.clear(socket, "my-canvas")
+        socket = Easel.LiveView.clear(socket, "my-canvas")
         events = socket.private.live_temp[:push_events]
 
-        assert [["canvas:my-canvas:clear", %{}]] = events
+        assert [["easel:my-canvas:clear", %{}]] = events
       end
     end
   end

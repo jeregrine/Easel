@@ -1,4 +1,4 @@
-source = File.read!(Path.join(:code.priv_dir(:canvas), "canvas.webidl"))
+source = File.read!(Path.join(:code.priv_dir(:easel), "easel.webidl"))
 
 # A minimal snippet for micro-benchmarking individual aspects
 small_interface = """
@@ -23,10 +23,10 @@ interface mixin CanvasDrawPath {
 
 Benchee.run(
   %{
-    "parse - full canvas.webidl" => fn -> Canvas.WebIDL.parse(source) end,
-    "parse - small interface" => fn -> Canvas.WebIDL.parse(small_interface) end,
-    "parse - overloaded interface" => fn -> Canvas.WebIDL.parse(overloaded_interface) end,
-    "members_by_name - full canvas.webidl" => fn -> Canvas.WebIDL.members_by_name(source) end
+    "parse - full easel.webidl" => fn -> Easel.WebIDL.parse(source) end,
+    "parse - small interface" => fn -> Easel.WebIDL.parse(small_interface) end,
+    "parse - overloaded interface" => fn -> Easel.WebIDL.parse(overloaded_interface) end,
+    "members_by_name - full easel.webidl" => fn -> Easel.WebIDL.members_by_name(source) end
   },
   warmup: 2,
   time: 5,

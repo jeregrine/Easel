@@ -1,4 +1,4 @@
-defmodule Canvas.WebIDLTest do
+defmodule Easel.WebIDLTest do
   use ExUnit.Case
 
   describe "parse/1" do
@@ -6,14 +6,14 @@ defmodule Canvas.WebIDLTest do
       idl = "interface Foo {};"
 
       assert [%{"type" => "interface", "name" => "Foo", "members" => []}] =
-               Canvas.WebIDL.parse(idl)
+               Easel.WebIDL.parse(idl)
     end
 
     test "parses an interface mixin" do
       idl = "interface mixin Bar {};"
 
       assert [%{"type" => "interface mixin", "name" => "Bar", "members" => []}] =
-               Canvas.WebIDL.parse(idl)
+               Easel.WebIDL.parse(idl)
     end
 
     test "parses a readonly attribute" do
@@ -23,7 +23,7 @@ defmodule Canvas.WebIDLTest do
       };
       """
 
-      [%{"members" => [member]}] = Canvas.WebIDL.parse(idl)
+      [%{"members" => [member]}] = Easel.WebIDL.parse(idl)
       assert member["type"] == "attribute"
       assert member["name"] == "width"
       assert member["readonly"] == true
@@ -36,7 +36,7 @@ defmodule Canvas.WebIDLTest do
       };
       """
 
-      [%{"members" => [member]}] = Canvas.WebIDL.parse(idl)
+      [%{"members" => [member]}] = Easel.WebIDL.parse(idl)
       assert member["type"] == "attribute"
       assert member["name"] == "font"
       assert member["readonly"] == false
@@ -49,7 +49,7 @@ defmodule Canvas.WebIDLTest do
       };
       """
 
-      [%{"members" => [member]}] = Canvas.WebIDL.parse(idl)
+      [%{"members" => [member]}] = Easel.WebIDL.parse(idl)
       assert member["type"] == "operation"
       assert member["name"] == "save"
       assert member["arguments"] == []
@@ -62,7 +62,7 @@ defmodule Canvas.WebIDLTest do
       };
       """
 
-      [%{"members" => [member]}] = Canvas.WebIDL.parse(idl)
+      [%{"members" => [member]}] = Easel.WebIDL.parse(idl)
       assert member["name"] == "fillRect"
       assert length(member["arguments"]) == 4
 
@@ -81,7 +81,7 @@ defmodule Canvas.WebIDLTest do
       };
       """
 
-      [%{"members" => [member]}] = Canvas.WebIDL.parse(idl)
+      [%{"members" => [member]}] = Easel.WebIDL.parse(idl)
       [arg] = member["arguments"]
       assert arg["name"] == "winding"
       assert arg["optional"] == true
@@ -95,7 +95,7 @@ defmodule Canvas.WebIDLTest do
       };
       """
 
-      [%{"members" => [member]}] = Canvas.WebIDL.parse(idl)
+      [%{"members" => [member]}] = Easel.WebIDL.parse(idl)
       ccw = List.last(member["arguments"])
       assert ccw["name"] == "ccw"
       assert ccw["optional"] == true
@@ -109,7 +109,7 @@ defmodule Canvas.WebIDLTest do
       };
       """
 
-      [%{"members" => [member]}] = Canvas.WebIDL.parse(idl)
+      [%{"members" => [member]}] = Easel.WebIDL.parse(idl)
       flags = List.last(member["arguments"])
       assert flags["name"] == "flags"
       assert flags["optional"] == true
@@ -124,7 +124,7 @@ defmodule Canvas.WebIDLTest do
       };
       """
 
-      [%{"members" => members}] = Canvas.WebIDL.parse(idl)
+      [%{"members" => members}] = Easel.WebIDL.parse(idl)
       assert length(members) == 2
       [no_args, with_path] = members
       assert no_args["name"] == "stroke"
@@ -140,7 +140,7 @@ defmodule Canvas.WebIDLTest do
       };
       """
 
-      [%{"members" => [member]}] = Canvas.WebIDL.parse(idl)
+      [%{"members" => [member]}] = Easel.WebIDL.parse(idl)
       [x, _y] = member["arguments"]
       assert x["idlType"]["idlType"] =~ "unrestricted"
       assert x["idlType"]["idlType"] =~ "double"
@@ -153,7 +153,7 @@ defmodule Canvas.WebIDLTest do
       };
       """
 
-      [%{"members" => [member]}] = Canvas.WebIDL.parse(idl)
+      [%{"members" => [member]}] = Easel.WebIDL.parse(idl)
       assert member["idlType"]["idlType"] =~ "HTMLCanvasElement"
       assert member["idlType"]["idlType"] =~ "?"
     end
@@ -165,7 +165,7 @@ defmodule Canvas.WebIDLTest do
       };
       """
 
-      [%{"members" => [member]}] = Canvas.WebIDL.parse(idl)
+      [%{"members" => [member]}] = Easel.WebIDL.parse(idl)
       assert member["name"] == "fillStyle"
       assert member["idlType"]["idlType"] =~ "DOMString"
       assert member["idlType"]["idlType"] =~ "CanvasGradient"
@@ -178,7 +178,7 @@ defmodule Canvas.WebIDLTest do
       };
       """
 
-      [%{"members" => [member]}] = Canvas.WebIDL.parse(idl)
+      [%{"members" => [member]}] = Easel.WebIDL.parse(idl)
       [arg] = member["arguments"]
       assert arg["name"] == "segments"
       assert arg["idlType"]["idlType"] =~ "sequence"
@@ -193,7 +193,7 @@ defmodule Canvas.WebIDLTest do
       };
       """
 
-      [%{"members" => members}] = Canvas.WebIDL.parse(idl)
+      [%{"members" => members}] = Easel.WebIDL.parse(idl)
       assert length(members) == 1
       assert hd(members)["name"] == "save"
     end
@@ -206,7 +206,7 @@ defmodule Canvas.WebIDLTest do
       };
       """
 
-      [%{"members" => [member]}] = Canvas.WebIDL.parse(idl)
+      [%{"members" => [member]}] = Easel.WebIDL.parse(idl)
       assert member["name"] == "scale"
     end
 
@@ -219,7 +219,7 @@ defmodule Canvas.WebIDLTest do
       Ctx includes SomeMixin;
       """
 
-      result = Canvas.WebIDL.parse(idl)
+      result = Easel.WebIDL.parse(idl)
       assert length(result) == 1
       assert hd(result)["name"] == "Ctx"
     end
@@ -233,7 +233,7 @@ defmodule Canvas.WebIDLTest do
       };
       """
 
-      [%{"members" => [member]}] = Canvas.WebIDL.parse(idl)
+      [%{"members" => [member]}] = Easel.WebIDL.parse(idl)
       assert member["name"] == "save"
     end
 
@@ -246,14 +246,14 @@ defmodule Canvas.WebIDLTest do
       };
       """
 
-      [%{"members" => members}] = Canvas.WebIDL.parse(idl)
+      [%{"members" => members}] = Easel.WebIDL.parse(idl)
       assert length(members) == 2
     end
 
     test "parses the actual canvas WebIDL file" do
       result =
-        File.read!(Path.join(:code.priv_dir(:canvas), "canvas.webidl"))
-        |> Canvas.WebIDL.parse()
+        File.read!(Path.join(:code.priv_dir(:easel), "easel.webidl"))
+        |> Easel.WebIDL.parse()
 
       interfaces = Enum.map(result, & &1["name"])
       assert "CanvasRenderingContext2D" in interfaces
@@ -274,7 +274,7 @@ defmodule Canvas.WebIDLTest do
       };
       """
 
-      members = Canvas.WebIDL.members_by_name(idl)
+      members = Easel.WebIDL.members_by_name(idl)
       assert length(members["fill"]) == 2
       assert length(members["stroke"]) == 2
     end
@@ -287,7 +287,7 @@ defmodule Canvas.WebIDLTest do
       };
       """
 
-      members = Canvas.WebIDL.members_by_name(idl)
+      members = Easel.WebIDL.members_by_name(idl)
       refute Map.has_key?(members, "width")
       assert Map.has_key?(members, "font")
     end
@@ -300,7 +300,7 @@ defmodule Canvas.WebIDLTest do
       };
       """
 
-      members = Canvas.WebIDL.members_by_name(idl)
+      members = Easel.WebIDL.members_by_name(idl)
       refute Map.has_key?(members, "FLAG")
       assert Map.has_key?(members, "save")
     end

@@ -1,4 +1,4 @@
-defmodule Canvas.API do
+defmodule Easel.API do
   @moduledoc """
   Represents the Canvas API, in elixir!
 
@@ -6,11 +6,11 @@ defmodule Canvas.API do
   [CanvasRenderingContext2D](https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D).
   """
 
-  dir = :code.priv_dir(:canvas)
+  dir = :code.priv_dir(:easel)
 
   idl =
-    File.read!("#{dir}/canvas.webidl")
-    |> Canvas.WebIDL.members_by_name()
+    File.read!("#{dir}/easel.webidl")
+    |> Easel.WebIDL.members_by_name()
 
   %{"data" => bcd} =
     File.read!("#{dir}/compat.json")
@@ -68,11 +68,11 @@ defmodule Canvas.API do
     end)
 
   def set(ctx, key, val) do
-    Canvas.push_op(ctx, ["set", [key, val]])
+    Easel.push_op(ctx, ["set", [key, val]])
   end
 
   def call(ctx, op, arguments) do
-    Canvas.push_op(ctx, [op, arguments])
+    Easel.push_op(ctx, [op, arguments])
   end
 
   for d <- defs do

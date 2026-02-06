@@ -6,15 +6,15 @@ function executeOps(context, ops) {
       } else if (typeof context[op] === "function") {
         context[op](...args);
       } else {
-        console.warn("[Canvas] Unknown operation:", op);
+        console.warn("[Easel] Unknown operation:", op);
       }
     } catch (e) {
-      console.error("[Canvas] Error executing op:", op, args, e);
+      console.error("[Easel] Error executing op:", op, args, e);
     }
   }
 }
 
-export const CanvasHook = {
+export const EaselHook = {
   mounted() {
     this.context = this.el.getContext("2d");
 
@@ -25,12 +25,12 @@ export const CanvasHook = {
     }
 
     // Listen for draw events
-    this.handleEvent(`canvas:${this.el.id}:draw`, ({ ops }) => {
+    this.handleEvent(`easel:${this.el.id}:draw`, ({ ops }) => {
       executeOps(this.context, ops);
     });
 
     // Listen for clear events
-    this.handleEvent(`canvas:${this.el.id}:clear`, () => {
+    this.handleEvent(`easel:${this.el.id}:clear`, () => {
       this.context.clearRect(0, 0, this.el.width, this.el.height);
     });
   },
