@@ -47,8 +47,12 @@ export const EaselHook = {
     Object.assign(this._templates, templates);
     const ops = JSON.parse(this.el.dataset.ops || "[]");
     if (ops.length > 0) {
-      this.context.clearRect(0, 0, this.el.width, this.el.height);
-      executeOps(this.context, this._templates, ops);
+      const ctx = this.context;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, this.el.width, this.el.height);
+      const dpr = this._dpr || 1;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      executeOps(ctx, this._templates, ops);
     }
   },
   scheduleFrame() {
@@ -62,7 +66,16 @@ export const EaselHook = {
     });
   },
   mounted() {
+    const dpr = window.devicePixelRatio || 1;
+    this._dpr = dpr;
+    const w = this.el.width;
+    const h = this.el.height;
+    this.el.width = w * dpr;
+    this.el.height = h * dpr;
+    this.el.style.width = w + "px";
+    this.el.style.height = h + "px";
     this.context = this.el.getContext("2d");
+    this.context.scale(dpr, dpr);
     this._templates = {};
     this._dirty = false;
     this._rafId = null;
