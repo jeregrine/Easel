@@ -1,5 +1,8 @@
 # Easel
 
+[![Hex.pm](https://img.shields.io/hexpm/v/easel.svg)](https://hex.pm/packages/easel)
+[![Docs](https://img.shields.io/badge/hex-docs-blue.svg)](https://hexdocs.pm/easel)
+
 Easel allows you to interact and draw on a canvas. The API is a `snake_cased` version of the [CanvasRenderingContext2D](https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D) with the addition of `set` and `call` if you need to set a property or call a function not yet supported.
 
 The idea is you create a canvas, apply the draw operations to it then send it off to the Browser or Wx to render. This allows us to use Elixir to draw basically anything, further it comes with the following features:
@@ -8,7 +11,7 @@ The idea is you create a canvas, apply the draw operations to it then send it of
   - With support for layers.
   - Animations and Event handling
   - And templating and instancing of drawing, so you don't have to send all the draw commands on every frame, just the values that have changed.
-- Optional Wx Rendering for local art and speed.
+- Optional Wx Rendering for local art and speed using the same Canvas API!.
 
 ## Example
 
@@ -322,12 +325,22 @@ Erlang must be compiled with wxWidgets support. If you use [mise](https://mise.j
 
 ## Installation
 
+Add `easel` to your list of dependencies in `mix.exs`:
+
 ```elixir
 def deps do
   [
-    {:easel, "~> 0.1.0"},
+    {:easel, "~> 0.2.0"},
     # optional, for LiveView support
     {:phoenix_live_view, "~> 1.0"}
   ]
 end
 ```
+
+Then fetch your dependencies:
+
+```bash
+mix deps.get
+```
+
+Documentation is available on [HexDocs](https://hexdocs.pm/easel).
