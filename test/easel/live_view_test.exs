@@ -308,5 +308,93 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
         assert socket == socket
       end
     end
+
+    describe "canvas_stack/1 component" do
+      test "renders a container div with layers" do
+        assigns = %{
+          bg_ops: [["fillRect", [0, 0, 100, 100]]],
+          fg_ops: [["strokeRect", [10, 10, 50, 50]]]
+        }
+
+        html = rendered_to_string(~H"""
+          <Easel.LiveView.canvas_stack id="game" width={800} height={600}>
+            <:layer id="bg" ops={@bg_ops} />
+            <:layer id="fg" ops={@fg_ops} />
+          </Easel.LiveView.canvas_stack>
+        """)
+
+        assert html =~ ~s(id="game")
+        assert html =~ ~s(position: relative)
+        assert html =~ ~s(width: 800px)
+        assert html =~ ~s(height: 600px)
+        assert html =~ ~s(id="bg")
+        assert html =~ ~s(id="fg")
+        assert html =~ ~s(position: absolute)
+      end
+
+      test "each layer is an independent canvas with hook" do
+        assigns = %{}
+
+        html = rendered_to_string(~H"""
+          <Easel.LiveView.canvas_stack id="stack" width={100} height={100}>
+            <:layer id="l1" ops={[]} />
+            <:layer id="l2" ops={[]} />
+          </Easel.LiveView.canvas_stack>
+        """)
+
+        # Both layers get phx-hook
+        assert length(String.split(html, "phx-hook")) == 3  # 2 hooks + 1 = 3 parts
+      end
+
+      test "layers pass through event flags" do
+        assigns = %{}
+
+        html = rendered_to_string(~H"""
+          <Easel.LiveView.canvas_stack id="stack" width={100} height={100}>
+            <:layer id="bg" ops={[]} />
+            <:layer id="fg" ops={[]} on_click />
+          </Easel.LiveView.canvas_stack>
+        """)
+
+        assert html =~ ~s(click)
+      end
+    end
+
+    describe "templates in draw/3" do
+      setup do
+        socket = %Phoenix.LiveView.Socket{
+          private: %{live_temp: %{}},
+          endpoint: nil
+        }
+
+        {:ok, socket: socket}
+      end
+
+      test "includes templates in draw payload when present", %{socket: socket} do
+        canvas =
+          Easel.new(100, 100)
+          |> Easel.template(:dot, fn c ->
+            c |> Easel.API.begin_path() |> Easel.API.fill()
+          end)
+          |> Easel.instances(:dot, [%{x: 10, y: 20}])
+
+        socket = Easel.LiveView.draw(socket, "c1", canvas)
+        [["easel:c1:draw", payload]] = socket.private.live_temp[:push_events]
+
+        assert Map.has_key?(payload, :templates)
+        assert Map.has_key?(payload.templates, :dot)
+      end
+
+      test "omits templates when none defined", %{socket: socket} do
+        canvas =
+          Easel.new(100, 100)
+          |> Easel.API.fill_rect(0, 0, 100, 100)
+
+        socket = Easel.LiveView.draw(socket, "c1", canvas)
+        [["easel:c1:draw", payload]] = socket.private.live_temp[:push_events]
+
+        refute Map.has_key?(payload, :templates)
+      end
+    end
   end
 end

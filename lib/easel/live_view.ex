@@ -136,6 +136,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
     attr :width, :integer, default: nil
     attr :height, :integer, default: nil
     attr :ops, :list, default: []
+    attr :templates, :map, default: %{}
     attr :class, :string, default: nil
     attr :on_click, :boolean, default: false
     attr :on_mouse_down, :boolean, default: false
@@ -164,6 +165,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
         class={@class}
         tabindex={if @on_key_down, do: "0"}
         data-ops={Phoenix.json_library().encode!(@ops)}
+        data-templates={Phoenix.json_library().encode!(@templates)}
         data-events={@events}
         {@rest}
       />
@@ -180,7 +182,9 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
             const ctx = this.context;
             for (const [op, args] of ops) {
               try {
-                if (op === "set") {
+                if (op === "__instances") {
+                  this.drawInstances(args[0], args[1]);
+                } else if (op === "set") {
                   ctx[args[0]] = args[1];
                 } else if (typeof ctx[op] === "function") {
                   ctx[op](...args);
@@ -192,18 +196,55 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
               }
             }
           },
+          drawInstances(name, instances) {
+            const tpl = this.templates[name];
+            if (!tpl) { console.warn("[Easel] Unknown template:", name); return; }
+            const ctx = this.context;
+            for (const inst of instances) {
+              ctx.save();
+              ctx.translate(inst.x || 0, inst.y || 0);
+              if (inst.rotate) ctx.rotate(inst.rotate);
+              if (inst.scale_x != null || inst.scale_y != null)
+                ctx.scale(inst.scale_x ?? 1, inst.scale_y ?? 1);
+              if (inst.fill) ctx.fillStyle = inst.fill;
+              if (inst.stroke) ctx.strokeStyle = inst.stroke;
+              if (inst.alpha != null) ctx.globalAlpha = inst.alpha;
+              this.executeOps(tpl);
+              ctx.restore();
+            }
+          },
+          loadTemplates() {
+            const raw = this.el.dataset.templates || "{}";
+            const parsed = JSON.parse(raw);
+            this.templates = Object.assign(this.templates || {}, parsed);
+          },
           drawFromData() {
+            this.loadTemplates();
             const ops = JSON.parse(this.el.dataset.ops || "[]");
             if (ops.length > 0) {
               this.context.clearRect(0, 0, this.el.width, this.el.height);
               this.executeOps(ops);
             }
           },
+          scheduleFrame() {
+            if (this._rafId) return;
+            this._rafId = requestAnimationFrame(() => {
+              this._rafId = null;
+              if (this._dirty) {
+                this._dirty = false;
+                this.drawFromData();
+              }
+            });
+          },
           mounted() {
             this.context = this.el.getContext("2d");
+            this.templates = {};
+            this._dirty = false;
+            this._rafId = null;
             this.drawFromData();
 
-            this.handleEvent(`easel:${this.el.id}:draw`, ({ ops }) => {
+            this.handleEvent(`easel:${this.el.id}:draw`, ({ ops, templates }) => {
+              if (templates) Object.assign(this.templates, templates);
               this.executeOps(ops);
             });
 
@@ -234,10 +275,77 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
             }
           },
           updated() {
-            this.drawFromData();
+            this._dirty = true;
+            this.scheduleFrame();
+          },
+          destroyed() {
+            if (this._rafId) cancelAnimationFrame(this._rafId);
           }
         }
       </script>
+      """
+    end
+
+    @doc """
+    Renders a stack of layered canvases. Each layer is an independent
+    `<canvas>` element, stacked via CSS `position: absolute`. Only layers
+    whose ops change get redrawn — LiveView's normal diffing handles this.
+
+    ## Example
+
+        <Easel.LiveView.canvas_stack id="game" width={800} height={600}>
+          <:layer id="background" ops={@background.ops} />
+          <:layer id="sprites" ops={@sprites.ops} templates={@sprites.templates} />
+          <:layer id="ui" ops={@ui.ops} />
+        </Easel.LiveView.canvas_stack>
+
+    ## Slots
+
+    Each `:layer` slot accepts:
+
+      * `id` (required) — unique DOM id for this layer's canvas
+      * `ops` — list of drawing operations
+      * `templates` — map of template definitions (for instance rendering)
+      * `on_click`, `on_mouse_down`, `on_mouse_up`, `on_mouse_move`, `on_key_down` — event flags
+
+    Only the topmost layer with event flags will receive pointer events.
+    Lower layers have `pointer-events: none` by default.
+    """
+    attr :id, :string, required: true
+    attr :width, :integer, required: true
+    attr :height, :integer, required: true
+    attr :class, :string, default: nil
+    attr :rest, :global
+
+    slot :layer, required: true do
+      attr :id, :string, required: true
+      attr :ops, :list
+      attr :templates, :map
+      attr :on_click, :boolean
+      attr :on_mouse_down, :boolean
+      attr :on_mouse_up, :boolean
+      attr :on_mouse_move, :boolean
+      attr :on_key_down, :boolean
+    end
+
+    def canvas_stack(assigns) do
+      ~H"""
+      <div id={@id} class={@class} style={"position: relative; width: #{@width}px; height: #{@height}px;"} {@rest}>
+        <.canvas
+          :for={layer <- @layer}
+          id={layer.id}
+          width={@width}
+          height={@height}
+          ops={Map.get(layer, :ops, [])}
+          templates={Map.get(layer, :templates, %{})}
+          style="position: absolute; top: 0; left: 0;"
+          on_click={Map.get(layer, :on_click, false)}
+          on_mouse_down={Map.get(layer, :on_mouse_down, false)}
+          on_mouse_up={Map.get(layer, :on_mouse_up, false)}
+          on_mouse_move={Map.get(layer, :on_mouse_move, false)}
+          on_key_down={Map.get(layer, :on_key_down, false)}
+        />
+      </div>
       """
     end
 
@@ -255,12 +363,19 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
     def draw(socket, id, %Easel{} = canvas, opts \\ []) do
       canvas = Easel.render(canvas)
 
+      payload =
+        if map_size(canvas.templates) > 0 do
+          %{ops: canvas.ops, templates: canvas.templates}
+        else
+          %{ops: canvas.ops}
+        end
+
       if opts[:clear] do
         socket
         |> Phoenix.LiveView.push_event("easel:#{id}:clear", %{})
-        |> Phoenix.LiveView.push_event("easel:#{id}:draw", %{ops: canvas.ops})
+        |> Phoenix.LiveView.push_event("easel:#{id}:draw", payload)
       else
-        Phoenix.LiveView.push_event(socket, "easel:#{id}:draw", %{ops: canvas.ops})
+        Phoenix.LiveView.push_event(socket, "easel:#{id}:draw", payload)
       end
     end
 

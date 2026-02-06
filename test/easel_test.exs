@@ -135,4 +135,173 @@ defmodule EaselTest do
       assert decoded == canvas.ops
     end
   end
+
+  describe "templates and instances" do
+    test "template defines reusable ops" do
+      canvas =
+        Easel.new(100, 100)
+        |> Easel.template(:dot, fn c ->
+          c
+          |> Easel.API.begin_path()
+          |> Easel.API.arc(0, 0, 5, 0, :math.pi() * 2)
+          |> Easel.API.fill()
+        end)
+
+      assert Map.has_key?(canvas.templates, :dot)
+      assert [["beginPath", []], ["arc", _], ["fill", []]] = canvas.templates[:dot]
+    end
+
+    test "instances emits __instances op" do
+      canvas =
+        Easel.new(100, 100)
+        |> Easel.template(:dot, fn c ->
+          c |> Easel.API.begin_path() |> Easel.API.arc(0, 0, 5, 0, 6.28) |> Easel.API.fill()
+        end)
+        |> Easel.instances(:dot, [%{x: 10, y: 20}, %{x: 30, y: 40}])
+        |> Easel.render()
+
+      assert [["__instances", ["dot", instances]]] = canvas.ops
+      assert length(instances) == 2
+      assert hd(instances) == %{x: 10, y: 20}
+    end
+
+    test "templates + ops are JSON-serializable" do
+      canvas =
+        Easel.new(100, 100)
+        |> Easel.template(:tri, fn c ->
+          c
+          |> Easel.API.begin_path()
+          |> Easel.API.move_to(0, -5)
+          |> Easel.API.line_to(-5, 5)
+          |> Easel.API.line_to(5, 5)
+          |> Easel.API.close_path()
+          |> Easel.API.fill()
+        end)
+        |> Easel.API.set_fill_style("#000")
+        |> Easel.API.fill_rect(0, 0, 100, 100)
+        |> Easel.instances(:tri, [%{x: 50, y: 50, rotate: 1.0, fill: "red"}])
+        |> Easel.render()
+
+      # ops serialize
+      json = JSON.encode!(canvas.ops)
+      assert is_binary(json)
+
+      # templates serialize
+      tjson = JSON.encode!(canvas.templates)
+      assert is_binary(tjson)
+
+      # round-trip
+      decoded = JSON.decode!(tjson)
+      assert Map.has_key?(decoded, "tri")
+    end
+
+    test "multiple templates on one canvas" do
+      canvas =
+        Easel.new(100, 100)
+        |> Easel.template(:a, fn c -> Easel.API.fill(c) end)
+        |> Easel.template(:b, fn c -> Easel.API.stroke(c) end)
+
+      assert map_size(canvas.templates) == 2
+      assert canvas.templates[:a] == [["fill", []]]
+      assert canvas.templates[:b] == [["stroke", []]]
+    end
+
+    test "instances with transform options" do
+      canvas =
+        Easel.new(100, 100)
+        |> Easel.template(:t, fn c -> Easel.API.fill(c) end)
+        |> Easel.instances(:t, [
+          %{x: 10, y: 20, rotate: 1.5, scale_x: 2.0, scale_y: 0.5, fill: "red", stroke: "blue", alpha: 0.5}
+        ])
+        |> Easel.render()
+
+      [["__instances", ["t", [inst]]]] = canvas.ops
+      assert inst.x == 10
+      assert inst.y == 20
+      assert inst.rotate == 1.5
+      assert inst.scale_x == 2.0
+      assert inst.fill == "red"
+      assert inst.alpha == 0.5
+    end
+  end
+
+  describe "expand/1" do
+    test "expands instances into plain ops" do
+      canvas =
+        Easel.new(100, 100)
+        |> Easel.template(:dot, fn c ->
+          c |> Easel.API.begin_path() |> Easel.API.fill()
+        end)
+        |> Easel.instances(:dot, [%{x: 10, y: 20}, %{x: 30, y: 40}])
+        |> Easel.expand()
+
+      # No __instances ops remain
+      refute Enum.any?(canvas.ops, fn [op | _] -> op == "__instances" end)
+
+      # Each instance: save, translate, beginPath, fill, restore = 5 ops
+      assert length(canvas.ops) == 10
+
+      assert [
+        ["save", []], ["translate", [10, 20]], ["beginPath", []], ["fill", []], ["restore", []],
+        ["save", []], ["translate", [30, 40]], ["beginPath", []], ["fill", []], ["restore", []]
+      ] = canvas.ops
+    end
+
+    test "expand includes style and transform ops" do
+      canvas =
+        Easel.new(100, 100)
+        |> Easel.template(:t, fn c -> Easel.API.fill(c) end)
+        |> Easel.instances(:t, [
+          %{x: 5, y: 10, rotate: 1.0, scale_x: 2.0, scale_y: 0.5, fill: "red", alpha: 0.8}
+        ])
+        |> Easel.expand()
+
+      assert [
+        ["save", []],
+        ["translate", [5, 10]],
+        ["rotate", [1.0]],
+        ["scale", [2.0, 0.5]],
+        ["set", ["fillStyle", "red"]],
+        ["set", ["globalAlpha", 0.8]],
+        ["fill", []],
+        ["restore", []]
+      ] = canvas.ops
+    end
+
+    test "expand preserves non-instance ops" do
+      canvas =
+        Easel.new(100, 100)
+        |> Easel.template(:t, fn c -> Easel.API.fill(c) end)
+        |> Easel.API.set_fill_style("blue")
+        |> Easel.API.fill_rect(0, 0, 100, 100)
+        |> Easel.instances(:t, [%{x: 50, y: 50}])
+        |> Easel.expand()
+
+      assert [
+        ["set", ["fillStyle", "blue"]],
+        ["fillRect", [0, 0, 100, 100]],
+        ["save", []], ["translate", [50, 50]], ["fill", []], ["restore", []]
+      ] = canvas.ops
+    end
+
+    test "expand on canvas with no instances is a no-op" do
+      canvas =
+        Easel.new(100, 100)
+        |> Easel.API.fill_rect(0, 0, 100, 100)
+        |> Easel.expand()
+
+      assert [["fillRect", [0, 0, 100, 100]]] = canvas.ops
+    end
+
+    test "expand auto-renders if needed" do
+      canvas =
+        Easel.new(100, 100)
+        |> Easel.template(:t, fn c -> Easel.API.fill(c) end)
+        |> Easel.instances(:t, [%{x: 1, y: 2}])
+        |> Easel.expand()
+
+      assert canvas.rendered == true
+      assert hd(canvas.ops) == ["save", []]
+    end
+  end
 end
