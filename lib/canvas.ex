@@ -1,17 +1,19 @@
 defmodule Canvas do
+  defstruct width: nil, height: nil, ops: []
+
   def new() do
-    %{width: nil, height: nil, ops: []}
+    %Canvas{}
   end
 
   def new(width, height) do
-    %{width: width, height: height, ops: []}
+    %Canvas{width: width, height: height}
   end
 
-  def push_op(ctx, op) do
+  def push_op(%Canvas{} = ctx, op) do
     Map.update!(ctx, :ops, fn ops -> [op | ops] end)
   end
 
-  def render(ctx) do
+  def render(%Canvas{} = ctx) do
     Map.update!(ctx, :ops, fn ops -> Enum.reverse(ops) end)
   end
 end
