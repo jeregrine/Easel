@@ -58,4 +58,8 @@ canvas =
   |> Sierpinski.triangle(ax, ay, bx, by, cx, cy, depth)
   |> Easel.render()
 
-IO.puts("Sierpinski triangle (depth #{depth}): #{length(canvas.ops)} operations")
+if Code.ensure_loaded?(Easel.WX) and Easel.WX.available?() do
+  Easel.WX.render(canvas, title: "Sierpinski Triangle")
+else
+  IO.puts("Sierpinski triangle (depth #{depth}): #{length(canvas.ops)} operations")
+end

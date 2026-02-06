@@ -51,4 +51,8 @@ canvas =
   Mondrian.generate(canvas, 0, 0, width, height, 0)
   |> Easel.render()
 
-IO.puts("Mondrian: #{length(canvas.ops)} operations")
+if Code.ensure_loaded?(Easel.WX) and Easel.WX.available?() do
+  Easel.WX.render(canvas, title: "Mondrian")
+else
+  IO.puts("Mondrian: #{length(canvas.ops)} operations")
+end

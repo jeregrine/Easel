@@ -61,4 +61,8 @@ canvas =
   end)
   |> Easel.render()
 
-IO.puts("Mandelbrot (#{width}x#{height}, max_iter=#{max_iter}): #{length(canvas.ops)} operations")
+if Code.ensure_loaded?(Easel.WX) and Easel.WX.available?() do
+  Easel.WX.render(canvas, title: "Mandelbrot")
+else
+  IO.puts("Mandelbrot (#{width}x#{height}, max_iter=#{max_iter}): #{length(canvas.ops)} operations")
+end

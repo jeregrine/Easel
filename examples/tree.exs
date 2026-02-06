@@ -69,4 +69,8 @@ canvas =
   Tree.draw(canvas, width / 2, height - 40, 100, -:math.pi() / 2, 0, 10)
   |> Easel.render()
 
-IO.puts("Fractal tree: #{length(canvas.ops)} operations")
+if Code.ensure_loaded?(Easel.WX) and Easel.WX.available?() do
+  Easel.WX.render(canvas, title: "Fractal Tree")
+else
+  IO.puts("Fractal tree: #{length(canvas.ops)} operations")
+end

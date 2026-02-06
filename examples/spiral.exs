@@ -48,4 +48,8 @@ canvas =
   end)
   |> Easel.render()
 
-IO.puts("Spiral: #{length(canvas.ops)} operations")
+if Code.ensure_loaded?(Easel.WX) and Easel.WX.available?() do
+  Easel.WX.render(canvas, title: "Spiral")
+else
+  IO.puts("Spiral: #{length(canvas.ops)} operations")
+end

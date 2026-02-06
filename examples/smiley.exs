@@ -31,5 +31,8 @@ canvas =
   |> API.stroke()
   |> Easel.render()
 
-IO.inspect(canvas.ops, label: "Smiley ops")
-IO.puts("#{length(canvas.ops)} operations")
+if Code.ensure_loaded?(Easel.WX) and Easel.WX.available?() do
+  Easel.WX.render(canvas, title: "Smiley")
+else
+  IO.puts("Smiley: #{length(canvas.ops)} operations")
+end
