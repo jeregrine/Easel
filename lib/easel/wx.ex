@@ -307,56 +307,7 @@ defmodule Easel.WX do
     # Callers pass atoms like :wxPENSTYLE_TRANSPARENT and get back integers.
     defp wx_const(atom) when is_atom(atom), do: :wxe_util.get_const(atom)
 
-    # Generates a 32×32 Elixir-purple diamond icon for the window
-    defp easel_icon do
-      size = 32
-      # Elixir purple: #4e2a8e
-      {pr, pg, pb} = {78, 42, 142}
 
-      pixels =
-        for y <- 0..(size - 1), x <- 0..(size - 1), into: <<>> do
-          # Diamond shape: |x - cx| / rx + |y - cy| / ry <= 1
-          cx = 15.5
-          cy = 15.5
-          dx = abs(x - cx) / 11.0
-          dy = abs(y - cy) / 14.0
-          dist = dx + dy
-
-          if dist <= 1.0 do
-            # Gradient: lighter at top, darker at bottom
-            t = y / size
-            r = round(pr + (1 - t) * 60)
-            g = round(pg + (1 - t) * 40)
-            b = round(pb + (1 - t) * 50)
-            <<r, g, b>>
-          else
-            <<0, 0, 0>>
-          end
-        end
-
-      alpha =
-        for y <- 0..(size - 1), x <- 0..(size - 1), into: <<>> do
-          cx = 15.5
-          cy = 15.5
-          dx = abs(x - cx) / 11.0
-          dy = abs(y - cy) / 14.0
-          dist = dx + dy
-
-          if dist <= 1.0 do
-            # Soft edges
-            edge = max(0.0, min(1.0, (1.0 - dist) * 6))
-            <<round(edge * 255)>>
-          else
-            <<0>>
-          end
-        end
-
-      image = :wxImage.new(size, size, pixels, alpha)
-      bitmap = :wxBitmap.new(image)
-      icon = :wxIcon.new()
-      :wxIcon.copyFromBitmap(icon, bitmap)
-      icon
-    end
 
     defstruct [
       :frame, :panel, :bitmap, :ops, :width, :height,
@@ -520,7 +471,6 @@ defmodule Easel.WX do
         :wxFrame.setMinSize(frame, frame_size)
         :wxFrame.setMaxSize(frame, frame_size)
 
-        :wxFrame.setIcon(frame, easel_icon())
         :wxFrame.center(frame)
         :wxFrame.show(frame)
 
