@@ -51,7 +51,8 @@ defmodule Boids do
 
   defp apply_rules(boid, boids) do
     {sep_x, sep_y, ali_x, ali_y, coh_x, coh_y, count} =
-      Enum.reduce(boids, {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0}, fn other, {sx, sy, ax, ay, cx, cy, n} ->
+      Enum.reduce(boids, {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0}, fn other,
+                                                               {sx, sy, ax, ay, cx, cy, n} ->
         dx = other.x - boid.x
         dy = other.y - boid.y
         dist = :math.sqrt(dx * dx + dy * dy)
@@ -79,10 +80,7 @@ defmodule Boids do
       # Separation
       {svx, svy} = {sep_x * @max_force * 1.5, sep_y * @max_force * 1.5}
 
-      %{boid |
-        vx: boid.vx + svx + avx + cvx,
-        vy: boid.vy + svy + avy + cvy
-      }
+      %{boid | vx: boid.vx + svx + avx + cvx, vy: boid.vy + svy + avy + cvy}
     else
       boid
     end
@@ -129,10 +127,7 @@ defmodule Boids do
   end
 
   defp wrap(boid) do
-    %{boid |
-      x: wrap_val(boid.x, @width),
-      y: wrap_val(boid.y, @height)
-    }
+    %{boid | x: wrap_val(boid.x, @width), y: wrap_val(boid.y, @height)}
   end
 
   defp wrap_val(v, max) do
@@ -183,11 +178,15 @@ boids = Boids.init()
 # Click to add a burst of new boids at the cursor position.
 # Otherwise, just simulate a few frames and print stats.
 if Code.ensure_loaded?(Easel.WX) and Easel.WX.available?() do
-  Easel.WX.animate(Boids.width(), Boids.height(), boids, fn boids ->
-    new_boids = Boids.tick(boids)
-    canvas = Boids.render(new_boids)
-    {canvas, new_boids}
-  end,
+  Easel.WX.animate(
+    Boids.width(),
+    Boids.height(),
+    boids,
+    fn boids ->
+      new_boids = Boids.tick(boids)
+      canvas = Boids.render(new_boids)
+      {canvas, new_boids}
+    end,
     title: "Boids — click to add",
     interval: 16,
     on_click: fn x, y, boids ->

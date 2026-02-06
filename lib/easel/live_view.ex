@@ -84,6 +84,43 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
     Available event attributes: `on_click`, `on_mouse_down`, `on_mouse_up`,
     `on_mouse_move`, `on_key_down`.
 
+    ## Layers
+
+    Use `canvas_stack/1` to layer multiple canvases. Each layer is an
+    independent `<canvas>` element stacked via CSS. Only layers whose
+    assigns change get re-patched — static layers like backgrounds are
+    sent once:
+
+        <Easel.LiveView.canvas_stack id="game" width={800} height={600}>
+          <:layer id="background" ops={@background.ops} />
+          <:layer id="sprites" ops={@sprites.ops} templates={@sprites.templates} />
+          <:layer id="ui" ops={@ui.ops} />
+        </Easel.LiveView.canvas_stack>
+
+    ## Templates and Instances
+
+    For scenes with many similar shapes, define a template once and stamp
+    out instances. The template ops are cached client-side; only the
+    per-instance data (position, rotation, color) is sent each frame:
+
+        canvas =
+          Easel.new(800, 600)
+          |> Easel.template(:boid, fn c ->
+            c
+            |> Easel.API.begin_path()
+            |> Easel.API.move_to(12, 0)
+            |> Easel.API.line_to(-4, -5)
+            |> Easel.API.line_to(-4, 5)
+            |> Easel.API.close_path()
+            |> Easel.API.fill()
+          end)
+          |> Easel.instances(:boid, instances)
+          |> Easel.render()
+
+    Pass templates alongside ops in your template:
+
+        <Easel.LiveView.canvas id="c" ops={@canvas.ops} templates={@canvas.templates} ... />
+
     ## Animation
 
     Start a server-side animation loop:
@@ -92,11 +129,12 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
           socket =
             socket
             |> assign(:state, initial_state())
+            |> assign(:canvas, Easel.new(600, 400) |> Easel.render())
             |> Easel.LiveView.animate("my-canvas", :state, fn state ->
               new_state = tick(state)
               canvas = render(new_state)
               {canvas, new_state}
-            end, interval: 16)
+            end, interval: 16, canvas_assign: :canvas)
 
           {:ok, socket}
         end
@@ -106,7 +144,8 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
         end
 
     The canvas is redrawn each tick via LiveView's normal rendering cycle.
-    The hook detects changes to `data-ops` and redraws automatically.
+    The hook uses `requestAnimationFrame` to sync draws with the browser's
+    refresh rate — multiple server updates between frames are coalesced.
     """
 
     use Phoenix.Component

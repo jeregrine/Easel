@@ -93,6 +93,90 @@ Available: `on_click`, `on_mouse_down`, `on_mouse_up`, `on_mouse_move`, `on_key_
 
 Key events include `key`, `code`, `ctrl`, `shift`, `alt`, and `meta` fields.
 
+### Layers
+
+Use `canvas_stack/1` to layer multiple canvases. Each layer is an independent
+`<canvas>` element stacked via CSS. Only layers whose assigns change get
+re-patched by LiveView — static layers like backgrounds are sent once:
+
+```heex
+<Easel.LiveView.canvas_stack id="game" width={800} height={600}>
+  <:layer id="background" ops={@background.ops} />
+  <:layer id="sprites" ops={@sprites.ops} templates={@sprites.templates} />
+  <:layer id="ui" ops={@ui.ops} />
+</Easel.LiveView.canvas_stack>
+```
+
+Event flags go on the layer that should receive them (typically the topmost):
+
+```heex
+<:layer id="sprites" ops={@sprites.ops} on_click />
+```
+
+### Templates and Instances
+
+For scenes with many similar shapes (particles, sprites, entities), define a
+**template** once and stamp out **instances** with per-instance transforms.
+Only the instance data (position, rotation, color) is sent each frame — the
+template ops are cached client-side.
+
+```elixir
+canvas =
+  Easel.new(800, 600)
+  |> Easel.template(:boid, fn c ->
+    c
+    |> Easel.API.begin_path()
+    |> Easel.API.move_to(12, 0)
+    |> Easel.API.line_to(-4, -5)
+    |> Easel.API.line_to(-4, 5)
+    |> Easel.API.close_path()
+    |> Easel.API.fill()
+  end)
+  |> Easel.instances(:boid, Enum.map(boids, fn b ->
+    angle = :math.atan2(b.vy, b.vx)
+    hue = round(angle / :math.pi() * 180 + 180)
+    %{x: b.x, y: b.y, rotate: angle, fill: "hsl(#{hue}, 70%, 60%)"}
+  end))
+  |> Easel.render()
+```
+
+Pass templates to the canvas component alongside ops:
+
+```heex
+<Easel.LiveView.canvas
+  id="sprites"
+  width={800}
+  height={600}
+  ops={@canvas.ops}
+  templates={@canvas.templates}
+/>
+```
+
+Each instance map may contain:
+
+| Key        | Description                          | Default |
+|------------|--------------------------------------|---------|
+| `:x`, `:y` | Translation                         | `0`     |
+| `:rotate`  | Rotation in radians                  | `0`     |
+| `:scale_x`, `:scale_y` | Scale factors              | `1`     |
+| `:fill`    | Fill style override                  | —       |
+| `:stroke`  | Stroke style override                | —       |
+| `:alpha`   | Global alpha override                | —       |
+
+For non-JS backends (wx, custom renderers), call `Easel.expand/1` to flatten
+instances into plain Canvas 2D ops (save/translate/rotate/fill/restore):
+
+```elixir
+canvas |> Easel.expand()  # __instances → plain ops
+```
+
+**Payload comparison (100 boids):**
+
+| Approach | Ops/frame | Bytes/frame |
+|----------|-----------|-------------|
+| Inline ops (no templates) | ~504 | ~19 KB |
+| Templates + instances | 1 | ~7.8 KB |
+
 ### Animation
 
 Run a server-side animation loop. Use `:canvas_assign` so the template
@@ -124,8 +208,9 @@ The template binds ops to the canvas assign:
 <Easel.LiveView.canvas id="my-canvas" width={600} height={400} ops={@canvas.ops} />
 ```
 
-The hook automatically redraws when `data-ops` changes via LiveView's
-normal render cycle.
+The hook uses `requestAnimationFrame` to sync drawing with the browser's
+refresh rate. If multiple server updates arrive between frames, only the
+latest is drawn — no wasted renders.
 
 To stop the animation:
 
@@ -148,6 +233,9 @@ Easel.new(400, 300)
 |> Easel.render()
 |> Easel.WX.render(title: "My Drawing")
 ```
+
+Canvases with templates/instances are automatically expanded via `Easel.expand/1`
+before rendering in wx.
 
 ### Event handling
 

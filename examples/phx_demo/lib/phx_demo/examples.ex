@@ -39,8 +39,14 @@ defmodule PhxDemo.Examples do
     padding = 60
 
     data = [
-      {"2018", 45}, {"2019", 62}, {"2020", 78}, {"2021", 95},
-      {"2022", 120}, {"2023", 155}, {"2024", 190}, {"2025", 230}
+      {"2018", 45},
+      {"2019", 62},
+      {"2020", 78},
+      {"2021", 95},
+      {"2022", 120},
+      {"2023", 155},
+      {"2024", 190},
+      {"2025", 230}
     ]
 
     max_val = data |> Enum.map(&elem(&1, 1)) |> Enum.max()
@@ -49,7 +55,17 @@ defmodule PhxDemo.Examples do
     chart_h = height - padding * 2
     bar_w = chart_w / bar_count * 0.7
     gap = chart_w / bar_count * 0.3
-    colors = ["#6366f1", "#8b5cf6", "#a78bfa", "#c084fc", "#d946ef", "#ec4899", "#f43f5e", "#ef4444"]
+
+    colors = [
+      "#6366f1",
+      "#8b5cf6",
+      "#a78bfa",
+      "#c084fc",
+      "#d946ef",
+      "#ec4899",
+      "#f43f5e",
+      "#ef4444"
+    ]
 
     canvas =
       Easel.new(width, height)
@@ -128,7 +144,9 @@ defmodule PhxDemo.Examples do
         y = :rand.uniform(height)
         radius = :rand.uniform() * 2.5 + 0.5
         brightness = :rand.uniform(155) + 100
-        color = "rgba(#{brightness}, #{brightness}, #{min(255, brightness + 50)}, #{Float.round(:rand.uniform(), 2)})"
+
+        color =
+          "rgba(#{brightness}, #{brightness}, #{min(255, brightness + 50)}, #{Float.round(:rand.uniform(), 2)})"
 
         acc
         |> API.begin_path()
@@ -295,11 +313,13 @@ defmodule PhxDemo.Examples do
   defp mondrian_split(canvas, x, y, w, h, depth) do
     if :rand.uniform() < 0.5 do
       split = round(w * (0.3 + :rand.uniform() * 0.4))
+
       canvas
       |> mondrian_split(x, y, split, h, depth + 1)
       |> mondrian_split(x + split, y, w - split, h, depth + 1)
     else
       split = round(h * (0.3 + :rand.uniform() * 0.4))
+
       canvas
       |> mondrian_split(x, y, w, split, depth + 1)
       |> mondrian_split(x, y + split, w, h - split, depth + 1)
@@ -322,7 +342,16 @@ defmodule PhxDemo.Examples do
       |> API.fill_rect(0, 0, width, height)
       |> API.set_fill_style("#58a6ff")
 
-    sierpinski_tri(canvas, width / 2, padding, padding, padding + h, width - padding, padding + h, depth)
+    sierpinski_tri(
+      canvas,
+      width / 2,
+      padding,
+      padding,
+      padding + h,
+      width - padding,
+      padding + h,
+      depth
+    )
     |> Easel.render()
   end
 
@@ -526,7 +555,8 @@ defmodule PhxDemo.Examples do
     |> API.set_text_align("center")
     |> API.fill_text(
       "#{String.pad_leading("#{hours}", 2, "0")}:#{String.pad_leading("#{minutes}", 2, "0")}:#{String.pad_leading("#{seconds}", 2, "0")} UTC",
-      cx, cy + 55
+      cx,
+      cy + 55
     )
   end
 
@@ -583,7 +613,7 @@ defmodule PhxDemo.Examples do
     cy = trunc(boid.y / @cell_size)
 
     for dx <- -1..1, dy <- -1..1, reduce: [] do
-      acc -> (Map.get(grid, {cx + dx, cy + dy}, [])) ++ acc
+      acc -> Map.get(grid, {cx + dx, cy + dy}, []) ++ acc
     end
   end
 
@@ -591,7 +621,8 @@ defmodule PhxDemo.Examples do
     neighbors = boids_neighbors(boid, grid)
 
     {sep_x, sep_y, ali_x, ali_y, coh_x, coh_y, count} =
-      Enum.reduce(neighbors, {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0}, fn other, {sx, sy, ax, ay, cx, cy, n} ->
+      Enum.reduce(neighbors, {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0}, fn other,
+                                                                   {sx, sy, ax, ay, cx, cy, n} ->
         dx = other.x - boid.x
         dy = other.y - boid.y
         dist_sq = dx * dx + dy * dy
@@ -655,10 +686,7 @@ defmodule PhxDemo.Examples do
   end
 
   defp boids_wrap(boid) do
-    %{boid |
-      x: boids_wrap_val(boid.x, @boids_width),
-      y: boids_wrap_val(boid.y, @boids_height)
-    }
+    %{boid | x: boids_wrap_val(boid.x, @boids_width), y: boids_wrap_val(boid.y, @boids_height)}
   end
 
   defp boids_wrap_val(v, max) do

@@ -22,6 +22,26 @@ defmodule Easel do
       canvas.ops
       #=> [["set", ["fillStyle", "blue"]], ["fillRect", [0, 0, 100, 100]], ...]
 
+  ## Templates and Instances
+
+  For scenes with many similar shapes, define a template once and stamp
+  out instances with per-instance transforms:
+
+      canvas =
+        Easel.new(800, 600)
+        |> Easel.template(:particle, fn c ->
+          c |> Easel.API.begin_path() |> Easel.API.arc(0, 0, 3, 0, 6.28) |> Easel.API.fill()
+        end)
+        |> Easel.instances(:particle, [
+          %{x: 100, y: 200, fill: "red"},
+          %{x: 300, y: 400, fill: "blue", alpha: 0.5}
+        ])
+        |> Easel.render()
+
+  The LiveView hook renders instances client-side (template ops cached,
+  only instance data sent per frame). For other backends, call `expand/1`
+  to flatten into plain ops.
+
   ## Backends
 
     * `Easel.LiveView` — Phoenix LiveView component with colocated JS hook
