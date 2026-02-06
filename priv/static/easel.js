@@ -14,6 +14,14 @@ function executeOps(context, ops) {
   }
 }
 
+function canvasXY(el, e) {
+  const rect = el.getBoundingClientRect();
+  return {
+    x: Math.round(e.clientX - rect.left),
+    y: Math.round(e.clientY - rect.top),
+  };
+}
+
 export const EaselHook = {
   mounted() {
     this.context = this.el.getContext("2d");
@@ -33,5 +41,28 @@ export const EaselHook = {
     this.handleEvent(`easel:${this.el.id}:clear`, () => {
       this.context.clearRect(0, 0, this.el.width, this.el.height);
     });
+
+    // Wire up DOM events from data-events attribute
+    const events = JSON.parse(this.el.dataset.events || "[]");
+    const id = this.el.id;
+
+    for (const eventType of events) {
+      if (eventType === "keydown") {
+        this.el.addEventListener("keydown", (e) => {
+          this.pushEvent(`${id}:keydown`, {
+            key: e.key,
+            code: e.code,
+            ctrl: e.ctrlKey,
+            shift: e.shiftKey,
+            alt: e.altKey,
+            meta: e.metaKey,
+          });
+        });
+      } else {
+        this.el.addEventListener(eventType, (e) => {
+          this.pushEvent(`${id}:${eventType}`, canvasXY(this.el, e));
+        });
+      }
+    }
   },
 };

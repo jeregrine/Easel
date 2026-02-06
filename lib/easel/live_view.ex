@@ -49,6 +49,40 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
     Or clear and draw in one step:
 
         {:noreply, Easel.LiveView.draw(socket, "my-canvas", canvas, clear: true)}
+
+    ## Events
+
+    Enable mouse and keyboard events by setting the corresponding attributes.
+    Events are sent as LiveView events with the canvas id as a prefix:
+
+        <Easel.LiveView.canvas
+          id="my-canvas"
+          width={300}
+          height={300}
+          on_click
+          on_mouse_move
+          on_key_down
+        />
+
+    Then handle them in your LiveView:
+
+        def handle_event("my-canvas:click", %{"x" => x, "y" => y}, socket) do
+          # ...
+          {:noreply, socket}
+        end
+
+        def handle_event("my-canvas:mousemove", %{"x" => x, "y" => y}, socket) do
+          # ...
+          {:noreply, socket}
+        end
+
+        def handle_event("my-canvas:keydown", %{"key" => key}, socket) do
+          # ...
+          {:noreply, socket}
+        end
+
+    Available event attributes: `on_click`, `on_mouse_down`, `on_mouse_up`,
+    `on_mouse_move`, `on_key_down`.
     """
 
     use Phoenix.Component
@@ -65,6 +99,11 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       * `height` - canvas height in pixels
       * `ops` - initial list of ops to draw on mount (default `[]`)
       * `class` - CSS class for the canvas element
+      * `on_click` - enable click events (pushes `"\#{id}:click"`)
+      * `on_mouse_down` - enable mousedown events (pushes `"\#{id}:mousedown"`)
+      * `on_mouse_up` - enable mouseup events (pushes `"\#{id}:mouseup"`)
+      * `on_mouse_move` - enable mousemove events (pushes `"\#{id}:mousemove"`)
+      * `on_key_down` - enable keydown events (pushes `"\#{id}:keydown"`)
 
     Any additional attributes are passed through to the `<canvas>` element.
     """
@@ -73,21 +112,45 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
     attr :height, :integer, default: nil
     attr :ops, :list, default: []
     attr :class, :string, default: nil
+    attr :on_click, :boolean, default: false
+    attr :on_mouse_down, :boolean, default: false
+    attr :on_mouse_up, :boolean, default: false
+    attr :on_mouse_move, :boolean, default: false
+    attr :on_key_down, :boolean, default: false
     attr :rest, :global
 
     def canvas(assigns) do
+      events =
+        []
+        |> then(fn e -> if assigns.on_click, do: ["click" | e], else: e end)
+        |> then(fn e -> if assigns.on_mouse_down, do: ["mousedown" | e], else: e end)
+        |> then(fn e -> if assigns.on_mouse_up, do: ["mouseup" | e], else: e end)
+        |> then(fn e -> if assigns.on_mouse_move, do: ["mousemove" | e], else: e end)
+        |> then(fn e -> if assigns.on_key_down, do: ["keydown" | e], else: e end)
+
+      assigns = assign(assigns, :events, Phoenix.json_library().encode!(events))
+
       ~H"""
       <canvas
         id={@id}
-        phx-hook=".Canvas"
+        phx-hook=".Easel"
         width={@width}
         height={@height}
         class={@class}
+        tabindex={if @on_key_down, do: "0"}
         data-ops={Phoenix.json_library().encode!(@ops)}
+        data-events={@events}
         {@rest}
       />
-      <script :type={ColocatedHook} name=".Canvas" runtime>
+      <script :type={ColocatedHook} name=".Easel" runtime>
         {
+          canvasXY(e) {
+            const rect = this.el.getBoundingClientRect();
+            return {
+              x: Math.round(e.clientX - rect.left),
+              y: Math.round(e.clientY - rect.top)
+            };
+          },
           executeOps(ops) {
             const ctx = this.context;
             for (const [op, args] of ops) {
@@ -119,6 +182,28 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
             this.handleEvent(`easel:${this.el.id}:clear`, () => {
               this.context.clearRect(0, 0, this.el.width, this.el.height);
             });
+
+            const events = JSON.parse(this.el.dataset.events || "[]");
+            const id = this.el.id;
+
+            for (const eventType of events) {
+              if (eventType === "keydown") {
+                this.el.addEventListener("keydown", (e) => {
+                  this.pushEvent(`${id}:keydown`, {
+                    key: e.key,
+                    code: e.code,
+                    ctrl: e.ctrlKey,
+                    shift: e.shiftKey,
+                    alt: e.altKey,
+                    meta: e.metaKey
+                  });
+                });
+              } else {
+                this.el.addEventListener(eventType, (e) => {
+                  this.pushEvent(`${id}:${eventType}`, this.canvasXY(e));
+                });
+              }
+            }
           }
         }
       </script>

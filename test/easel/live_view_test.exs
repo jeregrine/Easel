@@ -74,6 +74,62 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
         assert html =~ "mounted()"
         assert html =~ "handleEvent"
       end
+
+      test "no events by default" do
+        assigns = %{}
+
+        html = rendered_to_string(~H"""
+          <Easel.LiveView.canvas id="test-canvas" width={100} height={100} />
+        """)
+
+        assert html =~ ~s(data-events="[]")
+        refute html =~ ~s(tabindex)
+      end
+
+      test "on_click enables click event" do
+        assigns = %{}
+
+        html = rendered_to_string(~H"""
+          <Easel.LiveView.canvas id="test-canvas" width={100} height={100} on_click />
+        """)
+
+        assert html =~ ~s(click)
+        assert html =~ ~s(data-events=")
+        assert html =~ ~s(pushEvent)
+      end
+
+      test "on_mouse_move enables mousemove event" do
+        assigns = %{}
+
+        html = rendered_to_string(~H"""
+          <Easel.LiveView.canvas id="test-canvas" width={100} height={100} on_mouse_move />
+        """)
+
+        assert html =~ ~s(mousemove)
+      end
+
+      test "on_key_down adds tabindex for focus" do
+        assigns = %{}
+
+        html = rendered_to_string(~H"""
+          <Easel.LiveView.canvas id="test-canvas" width={100} height={100} on_key_down />
+        """)
+
+        assert html =~ ~s(tabindex="0")
+        assert html =~ ~s(keydown)
+      end
+
+      test "multiple events" do
+        assigns = %{}
+
+        html = rendered_to_string(~H"""
+          <Easel.LiveView.canvas id="test-canvas" width={100} height={100} on_click on_mouse_down on_mouse_up />
+        """)
+
+        assert html =~ ~s(click)
+        assert html =~ ~s(mousedown)
+        assert html =~ ~s(mouseup)
+      end
     end
 
     describe "draw/3" do

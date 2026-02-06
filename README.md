@@ -60,6 +60,39 @@ Pass ops directly to render on mount:
 <Easel.LiveView.canvas id="my-canvas" width={300} height={300} ops={@canvas.ops} />
 ```
 
+### Events
+
+Enable mouse and keyboard events with boolean attributes:
+
+```heex
+<Easel.LiveView.canvas
+  id="my-canvas"
+  width={300}
+  height={300}
+  on_click
+  on_mouse_move
+  on_key_down
+/>
+```
+
+Events are pushed to your LiveView as `"<id>:<event>"`:
+
+```elixir
+def handle_event("my-canvas:click", %{"x" => x, "y" => y}, socket) do
+  IO.puts("Clicked at #{x}, #{y}")
+  {:noreply, socket}
+end
+
+def handle_event("my-canvas:keydown", %{"key" => key}, socket) do
+  IO.puts("Key pressed: #{key}")
+  {:noreply, socket}
+end
+```
+
+Available: `on_click`, `on_mouse_down`, `on_mouse_up`, `on_mouse_move`, `on_key_down`.
+
+Key events include `key`, `code`, `ctrl`, `shift`, `alt`, and `meta` fields.
+
 ## wx Backend
 
 Easel includes an optional native rendering backend using Erlang's `:wx` (wxWidgets).
