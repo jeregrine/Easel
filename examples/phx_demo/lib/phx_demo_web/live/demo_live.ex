@@ -37,7 +37,7 @@ defmodule PhxDemoWeb.DemoLive do
 
       <h2 class="text-xl font-semibold mb-4">Static</h2>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2 items-start">
         <.example title="Smiley">
           <Easel.LiveView.canvas id="smiley" width={200} height={200} ops={@smiley.ops} />
         </.example>
