@@ -91,6 +91,85 @@ defmodule Easel.WX do
     receive_loop(frame, panel, canvas.ops, width, height)
   end
 
+  @doc """
+  Runs an animation loop in a wx window.
+
+  Takes a width, height, initial state, and a function that receives
+  the current state and returns `{%Easel{}, new_state}`. The function
+  is called every `interval` milliseconds (default 16, ~60fps).
+
+  The loop runs until the window is closed, then returns `:ok`.
+
+  ## Options
+
+    * `:title` - window title (default `"Easel"`)
+    * `:interval` - milliseconds between frames (default `16`)
+
+  ## Example
+
+      Easel.WX.animate(600, 400, initial_state, fn state ->
+        {canvas, new_state} = MyApp.tick(state)
+        {canvas, new_state}
+      end, title: "Animation")
+  """
+  def animate(width, height, state, fun, opts \\ []) when is_function(fun, 1) do
+    title = Keyword.get(opts, :title, "Easel")
+    interval = Keyword.get(opts, :interval, 16)
+
+    wx = :wx.new()
+    frame = :wxFrame.new(wx, -1, String.to_charlist(title), size: {width, height})
+    panel = :wxPanel.new(frame)
+
+    :wxPanel.connect(panel, :paint, [:callback])
+
+    :wxFrame.show(frame)
+
+    :wxPanel.setFocus(panel)
+
+    # Kick off the first frame
+    timer = :timer.send_interval(interval, :tick)
+    result = animate_loop(frame, panel, width, height, state, fun)
+    :timer.cancel(timer)
+    result
+  end
+
+  defp animate_loop(frame, panel, width, height, state, fun) do
+    receive do
+      :tick ->
+        {canvas, new_state} = fun.(state)
+        canvas = Easel.render(canvas)
+        # Trigger repaint with new ops
+        send(self(), {:redraw, canvas.ops})
+        animate_loop(frame, panel, width, height, new_state, fun)
+
+      {:redraw, ops} ->
+        :wxPanel.refresh(panel)
+
+        receive do
+          {:wx, _, _, _, {:wxPaint, :paint}} ->
+            paint(panel, ops, width, height)
+        after
+          100 -> :ok
+        end
+
+        animate_loop(frame, panel, width, height, state, fun)
+
+      {:wx, _, _, _, {:wxPaint, :paint}} ->
+        # Initial paint or spurious - just run one frame
+        {canvas, new_state} = fun.(state)
+        canvas = Easel.render(canvas)
+        paint(panel, canvas.ops, width, height)
+        animate_loop(frame, panel, width, height, new_state, fun)
+
+      {:wx, _, _, _, {:wxClose, :close_window}} ->
+        :wxFrame.destroy(frame)
+        :ok
+
+      _other ->
+        animate_loop(frame, panel, width, height, state, fun)
+    end
+  end
+
   defp receive_loop(frame, panel, ops, width, height) do
     receive do
       # Paint callback
