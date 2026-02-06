@@ -559,6 +559,130 @@ defmodule PhxDemo.Examples do
     )
   end
 
+  # ── Matrix Rain ──────────────────────────────────────────────────
+
+  @matrix_width 800
+  @matrix_height 600
+  @matrix_font_size 14
+  @matrix_cols div(@matrix_width, @matrix_font_size)
+  @matrix_chars ~c"abcdefghijklmnopqrstuvwxyz0123456789@#$%^&*(){}[]|;:<>?ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ"
+
+  def matrix_init do
+    # Each column has a list of drops. Each drop is {row, speed, length, trail}
+    columns =
+      for col <- 0..(@matrix_cols - 1) do
+        drops = for _ <- 1..Enum.random(1..3), do: new_matrix_drop(col)
+        {col, drops}
+      end
+      |> Map.new()
+
+    %{columns: columns, tick: 0}
+  end
+
+  defp new_matrix_drop(_col) do
+    %{
+      row: -Enum.random(0..30),
+      speed: Enum.random(1..3) / 1.0,
+      length: Enum.random(8..25),
+      chars: for(_ <- 1..40, do: random_matrix_char())
+    }
+  end
+
+  defp random_matrix_char do
+    idx = :rand.uniform(length(@matrix_chars)) - 1
+    @matrix_chars |> Enum.at(idx) |> List.wrap() |> List.to_string()
+  end
+
+  def matrix_tick(%{columns: columns, tick: tick} = state) do
+    max_rows = div(@matrix_height, @matrix_font_size)
+
+    columns =
+      Map.new(columns, fn {col, drops} ->
+        drops =
+          Enum.map(drops, fn drop ->
+            %{drop | row: drop.row + drop.speed}
+          end)
+
+        # Respawn drops that have fully left the screen
+        drops =
+          Enum.map(drops, fn drop ->
+            if drop.row - drop.length > max_rows do
+              new_matrix_drop(col)
+            else
+              drop
+            end
+          end)
+
+        # Randomly glitch some characters
+        drops =
+          if :rand.uniform() < 0.3 do
+            Enum.map(drops, fn drop ->
+              idx = :rand.uniform(length(drop.chars)) - 1
+              chars = List.replace_at(drop.chars, idx, random_matrix_char())
+              %{drop | chars: chars}
+            end)
+          else
+            drops
+          end
+
+        {col, drops}
+      end)
+
+    %{state | columns: columns, tick: tick + 1}
+  end
+
+  def matrix_render(%{columns: columns}) do
+    max_rows = div(@matrix_height, @matrix_font_size)
+
+    canvas =
+      Easel.new(@matrix_width, @matrix_height)
+      # Semi-transparent black to create fade trail effect
+      |> Easel.set_fill_style("rgba(0, 0, 0, 0.85)")
+      |> Easel.fill_rect(0, 0, @matrix_width, @matrix_height)
+      |> Easel.set_font("#{@matrix_font_size}px monospace")
+      |> Easel.set_text_baseline("top")
+      |> Easel.set_text_align("center")
+
+    Enum.reduce(columns, canvas, fn {col, drops}, canvas ->
+      x = col * @matrix_font_size + @matrix_font_size / 2
+
+      Enum.reduce(drops, canvas, fn drop, canvas ->
+        head_row = trunc(drop.row)
+
+        Enum.reduce(0..(drop.length - 1), canvas, fn i, canvas ->
+          row = head_row - i
+
+          if row >= 0 and row < max_rows do
+            y = row * @matrix_font_size
+            char_idx = rem(abs(row), length(drop.chars))
+            char = Enum.at(drop.chars, char_idx)
+
+            {color, alpha} =
+              if i == 0 do
+                # Head of the stream — bright white/green
+                {"#ffffff", 1.0}
+              else
+                # Fade from bright green to dark green
+                brightness = 1.0 - i / drop.length
+                g = round(255 * brightness)
+                {"rgb(0, #{g}, 0)", max(0.1, brightness)}
+              end
+
+            canvas
+            |> Easel.save()
+            |> Easel.set_global_alpha(alpha)
+            |> Easel.set_fill_style(color)
+            |> Easel.fill_text(char, x, y)
+            |> Easel.restore()
+          else
+            canvas
+          end
+        end)
+      end)
+    end)
+    |> Easel.render()
+  end
+
   # ── Boids ───────────────────────────────────────────────────────
 
   @boids_width 800

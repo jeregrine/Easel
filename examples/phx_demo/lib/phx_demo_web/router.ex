@@ -16,5 +16,6 @@ defmodule PhxDemoWeb.Router do
     live "/", DemoLive
     live "/clock", ClockLive
     live "/boids", BoidsLive
+    live "/matrix", MatrixLive
   end
 end
