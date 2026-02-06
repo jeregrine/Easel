@@ -578,7 +578,9 @@ defmodule Easel.WX do
   Supports named colors, hex (`#rgb`, `#rrggbb`, `#rrggbbaa`),
   `rgb()`, and `rgba()`.
   """
-  def parse_color(value, _alpha \\ 1.0) when is_binary(value) do
+  def parse_color(value, alpha \\ 1.0)
+
+  def parse_color(value, _alpha) when is_binary(value) do
     value = String.trim(value) |> String.downcase()
 
     cond do
