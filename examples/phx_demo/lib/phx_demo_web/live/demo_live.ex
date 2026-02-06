@@ -17,7 +17,7 @@ defmodule PhxDemoWeb.DemoLive do
 
   def render(assigns) do
     ~H"""
-    <div class="max-w-6xl mx-auto py-8 px-4">
+    <div class="max-w-screen-xl mx-auto py-8 px-4">
       <h1 class="text-3xl font-bold mb-2">Easel LiveView Demos</h1>
       <p class="text-gray-600 mb-8">Canvas 2D rendering powered by Easel + Phoenix LiveView</p>
 
