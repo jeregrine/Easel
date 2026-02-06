@@ -180,13 +180,34 @@ end
 boids = Boids.init()
 
 # If wx is available, run the animation in a native window.
+# Click to add a burst of new boids at the cursor position.
 # Otherwise, just simulate a few frames and print stats.
-if Code.ensure_loaded?(:wx) do
+if Easel.WX.available?() do
   Easel.WX.animate(Boids.width(), Boids.height(), boids, fn boids ->
     new_boids = Boids.tick(boids)
     canvas = Boids.render(new_boids)
     {canvas, new_boids}
-  end, title: "Boids", interval: 16)
+  end,
+    title: "Boids — click to add",
+    interval: 16,
+    on_click: fn x, y, boids ->
+      # Spawn 10 new boids at click position
+      new =
+        for _ <- 1..10 do
+          angle = :rand.uniform() * 2 * :math.pi()
+          speed = 2.0 + :rand.uniform() * 2.0
+
+          %{
+            x: x * 1.0,
+            y: y * 1.0,
+            vx: :math.cos(angle) * speed,
+            vy: :math.sin(angle) * speed
+          }
+        end
+
+      new ++ boids
+    end
+  )
 else
   IO.puts("wx not available — simulating 60 frames...")
 

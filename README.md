@@ -76,6 +76,27 @@ Easel.new(400, 300)
 |> Easel.WX.render(title: "My Drawing")
 ```
 
+### Event handling
+
+Both `render/2` and `animate/5` accept optional event handler callbacks:
+
+```elixir
+# Static render — handlers receive (x, y) or (key_event)
+Easel.WX.render(canvas,
+  on_click: fn x, y -> IO.puts("Clicked at #{x}, #{y}") end,
+  on_mouse_move: fn x, y -> IO.puts("Mouse at #{x}, #{y}") end,
+  on_key_down: fn %{key: key} -> IO.puts("Key: #{key}") end
+)
+
+# Animation — handlers receive args + state, return new state
+Easel.WX.animate(600, 400, initial_state, tick_fn,
+  on_click: fn x, y, state -> %{state | target: {x, y}} end,
+  on_key_down: fn %{key: ?r}, state -> reset(state) end
+)
+```
+
+Available events: `:on_click`, `:on_mouse_down`, `:on_mouse_up`, `:on_mouse_move`, `:on_key_down`
+
 Not all Canvas 2D operations are supported in wx. Unsupported ops (shadows, filters,
 gradients, image data, etc.) will raise `Easel.WX.UnsupportedOpError`. See the
 `Easel.WX` module docs for the full list of supported operations.
