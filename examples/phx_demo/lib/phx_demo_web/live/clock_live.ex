@@ -12,7 +12,7 @@ defmodule PhxDemoWeb.ClockLive do
         now = Time.utc_now()
         canvas = PhxDemo.Examples.clock(now)
         {canvas, now}
-      end, interval: 1000)
+      end, interval: 1000, canvas_assign: :canvas)
 
     {:ok, socket}
   end

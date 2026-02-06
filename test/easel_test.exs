@@ -44,9 +44,25 @@ defmodule EaselTest do
         |> Easel.push_op(["b", []])
         |> Easel.render()
 
-      # Double render reverses again — document this behavior
+      # Double render is a no-op — safe to call multiple times
       double = Easel.render(canvas)
-      assert double.ops == [["b", []], ["a", []]]
+      assert double.ops == [["a", []], ["b", []]]
+      assert double.rendered == true
+    end
+
+    test "push_op after render resets rendered flag" do
+      canvas =
+        Easel.new(100, 100)
+        |> Easel.push_op(["a", []])
+        |> Easel.render()
+
+      assert canvas.rendered == true
+
+      canvas = Easel.push_op(canvas, ["c", []])
+      assert canvas.rendered == false
+
+      canvas = Easel.render(canvas)
+      assert canvas.ops == [["a", []], ["c", []]]
     end
 
     test "struct fields are accessible" do

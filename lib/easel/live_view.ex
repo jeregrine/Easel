@@ -83,6 +83,30 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
 
     Available event attributes: `on_click`, `on_mouse_down`, `on_mouse_up`,
     `on_mouse_move`, `on_key_down`.
+
+    ## Animation
+
+    Start a server-side animation loop:
+
+        def mount(_params, _session, socket) do
+          socket =
+            socket
+            |> assign(:state, initial_state())
+            |> Easel.LiveView.animate("my-canvas", :state, fn state ->
+              new_state = tick(state)
+              canvas = render(new_state)
+              {canvas, new_state}
+            end, interval: 16)
+
+          {:ok, socket}
+        end
+
+        def handle_info({:easel_tick, id}, socket) do
+          {:noreply, Easel.LiveView.tick(socket, id)}
+        end
+
+    The canvas is redrawn each tick via LiveView's normal rendering cycle.
+    The hook detects changes to `data-ops` and redraws automatically.
     """
 
     use Phoenix.Component
@@ -97,7 +121,8 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       * `id` (required) - unique DOM id, also used to target draw commands
       * `width` - canvas width in pixels
       * `height` - canvas height in pixels
-      * `ops` - initial list of ops to draw on mount (default `[]`)
+      * `ops` - list of ops to draw (default `[]`). When this changes, the
+        hook automatically clears and redraws.
       * `class` - CSS class for the canvas element
       * `on_click` - enable click events (pushes `"\#{id}:click"`)
       * `on_mouse_down` - enable mousedown events (pushes `"\#{id}:mousedown"`)
@@ -131,19 +156,17 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       assigns = assign(assigns, :events, Phoenix.json_library().encode!(events))
 
       ~H"""
-      <div id={"#{@id}-wrapper"} phx-update="ignore">
-        <canvas
-          id={@id}
-          phx-hook=".Easel"
-          width={@width}
-          height={@height}
-          class={@class}
-          tabindex={if @on_key_down, do: "0"}
-          data-ops={Phoenix.json_library().encode!(@ops)}
-          data-events={@events}
-          {@rest}
-        />
-      </div>
+      <canvas
+        id={@id}
+        phx-hook=".Easel"
+        width={@width}
+        height={@height}
+        class={@class}
+        tabindex={if @on_key_down, do: "0"}
+        data-ops={Phoenix.json_library().encode!(@ops)}
+        data-events={@events}
+        {@rest}
+      />
       <script :type={ColocatedHook} name=".Easel" runtime>
         {
           canvasXY(e) {
@@ -169,13 +192,16 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
               }
             }
           },
+          drawFromData() {
+            const ops = JSON.parse(this.el.dataset.ops || "[]");
+            if (ops.length > 0) {
+              this.context.clearRect(0, 0, this.el.width, this.el.height);
+              this.executeOps(ops);
+            }
+          },
           mounted() {
             this.context = this.el.getContext("2d");
-
-            const initialOps = JSON.parse(this.el.dataset.ops || "[]");
-            if (initialOps.length > 0) {
-              this.executeOps(initialOps);
-            }
+            this.drawFromData();
 
             this.handleEvent(`easel:${this.el.id}:draw`, ({ ops }) => {
               this.executeOps(ops);
@@ -206,6 +232,9 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
                 });
               }
             }
+          },
+          updated() {
+            this.drawFromData();
           }
         }
       </script>
@@ -214,6 +243,10 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
 
     @doc """
     Pushes draw operations to a canvas element on the client.
+
+    This uses `push_event` to send ops directly to the hook without
+    going through the normal render cycle. Useful for one-off draws
+    from event handlers.
 
     ## Options
 
@@ -242,55 +275,62 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
     Starts a server-side animation loop that redraws a canvas at a fixed interval.
 
     The `tick_fn` receives the current state and must return `{%Easel{}, new_state}`.
-    Each frame is pushed to the client as a clear+draw sequence.
+    Each frame, the rendered ops are stored in a canvas assign so the template
+    re-renders and the hook redraws automatically.
 
     Returns the socket with the animation state stored in assigns.
 
     ## Options
 
       * `:interval` - milliseconds between frames (default `16`, ~60fps)
-      * `:clear` - if `true`, clears before each frame (default `true`)
+      * `:canvas_assign` - assign key to store the rendered canvas
+        (default: same as `state_key`). Your template should bind
+        `ops={@canvas_assign_key.ops}` (or wherever you read ops from).
 
     ## Example
 
     In your LiveView `mount/3`:
 
         def mount(_params, _session, socket) do
+          initial = %{balls: [...], canvas: Easel.new(600, 400)}
+
           socket =
             socket
-            |> assign(:balls, initial_balls())
-            |> Easel.LiveView.animate("my-canvas", :balls, fn balls ->
-              new_balls = tick(balls)
+            |> assign(:state, initial)
+            |> Easel.LiveView.animate("my-canvas", :state, fn state ->
+              new_balls = tick(state.balls)
               canvas = render_balls(new_balls)
-              {canvas, new_balls}
+              {canvas, %{state | balls: new_balls, canvas: canvas}}
             end)
 
           {:ok, socket}
         end
-
-    The animation is identified by the canvas id. To stop it:
-
-        Easel.LiveView.stop_animation(socket, "my-canvas")
 
     Your LiveView must include a `handle_info` clause to receive ticks:
 
         def handle_info({:easel_tick, id}, socket) do
           {:noreply, Easel.LiveView.tick(socket, id)}
         end
+
+    To stop the animation:
+
+        Easel.LiveView.stop_animation(socket, "my-canvas")
     """
     def animate(socket, id, state_key, tick_fn, opts \\ []) do
       interval = Keyword.get(opts, :interval, 16)
-      clear = Keyword.get(opts, :clear, true)
+      canvas_assign = Keyword.get(opts, :canvas_assign, nil)
 
       anim_key = animation_key(id)
 
-      Process.send_after(self(), {:easel_tick, id}, interval)
+      if Phoenix.LiveView.connected?(socket) do
+        Process.send_after(self(), {:easel_tick, id}, interval)
+      end
 
       Phoenix.Component.assign(socket, anim_key, %{
         tick_fn: tick_fn,
         state_key: state_key,
+        canvas_assign: canvas_assign,
         interval: interval,
-        clear: clear,
         running: true
       })
     end
@@ -309,13 +349,19 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       if anim && anim.running do
         state = socket.assigns[anim.state_key]
         {canvas, new_state} = anim.tick_fn.(state)
+        canvas = Easel.render(canvas)
 
         # Schedule next tick
         Process.send_after(self(), {:easel_tick, id}, anim.interval)
 
-        socket
-        |> Phoenix.Component.assign(anim.state_key, new_state)
-        |> draw(id, canvas, clear: anim.clear)
+        socket = Phoenix.Component.assign(socket, anim.state_key, new_state)
+
+        # Update canvas assign so the template re-renders with new ops
+        if anim.canvas_assign do
+          Phoenix.Component.assign(socket, anim.canvas_assign, canvas)
+        else
+          socket
+        end
       else
         socket
       end

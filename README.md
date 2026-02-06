@@ -95,30 +95,37 @@ Key events include `key`, `code`, `ctrl`, `shift`, `alt`, and `meta` fields.
 
 ### Animation
 
-Run a server-side animation loop that pushes frames to the client:
+Run a server-side animation loop. Use `:canvas_assign` so the template
+re-renders with new ops each frame:
 
 ```elixir
 def mount(_params, _session, socket) do
   socket =
     socket
     |> assign(:balls, initial_balls())
+    |> assign(:canvas, Easel.new(600, 400) |> Easel.render())
     |> Easel.LiveView.animate("my-canvas", :balls, fn balls ->
       new_balls = tick(balls)
       canvas = render_balls(new_balls)
       {canvas, new_balls}
-    end, interval: 16)
+    end, interval: 16, canvas_assign: :canvas)
 
   {:ok, socket}
 end
-```
 
-Your LiveView must handle the tick message:
-
-```elixir
 def handle_info({:easel_tick, id}, socket) do
   {:noreply, Easel.LiveView.tick(socket, id)}
 end
 ```
+
+The template binds ops to the canvas assign:
+
+```heex
+<Easel.LiveView.canvas id="my-canvas" width={600} height={400} ops={@canvas.ops} />
+```
+
+The hook automatically redraws when `data-ops` changes via LiveView's
+normal render cycle.
 
 To stop the animation:
 

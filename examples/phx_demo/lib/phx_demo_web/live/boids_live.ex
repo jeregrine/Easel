@@ -13,7 +13,7 @@ defmodule PhxDemoWeb.BoidsLive do
         new_boids = PhxDemo.Examples.boids_tick(boids)
         canvas = PhxDemo.Examples.boids_render(new_boids)
         {canvas, new_boids}
-      end, interval: 33)
+      end, interval: 33, canvas_assign: :canvas)
 
     {:ok, socket}
   end

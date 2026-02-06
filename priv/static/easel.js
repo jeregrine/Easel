@@ -23,21 +23,22 @@ function canvasXY(el, e) {
 }
 
 export const EaselHook = {
+  drawFromData() {
+    const ops = JSON.parse(this.el.dataset.ops || "[]");
+    if (ops.length > 0) {
+      this.context.clearRect(0, 0, this.el.width, this.el.height);
+      executeOps(this.context, ops);
+    }
+  },
   mounted() {
     this.context = this.el.getContext("2d");
+    this.drawFromData();
 
-    // Draw initial ops from data attribute
-    const initialOps = JSON.parse(this.el.dataset.ops || "[]");
-    if (initialOps.length > 0) {
-      executeOps(this.context, initialOps);
-    }
-
-    // Listen for draw events
+    // Listen for imperative draw/clear events
     this.handleEvent(`easel:${this.el.id}:draw`, ({ ops }) => {
       executeOps(this.context, ops);
     });
 
-    // Listen for clear events
     this.handleEvent(`easel:${this.el.id}:clear`, () => {
       this.context.clearRect(0, 0, this.el.width, this.el.height);
     });
@@ -64,5 +65,8 @@ export const EaselHook = {
         });
       }
     }
+  },
+  updated() {
+    this.drawFromData();
   },
 };

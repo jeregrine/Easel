@@ -229,7 +229,6 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
         assert anim.running == true
         assert anim.state_key == :counter
         assert anim.interval == 16
-        assert anim.clear == true
         assert is_function(anim.tick_fn, 1)
       end
 
@@ -242,7 +241,20 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
         assert anim.interval == 1000
       end
 
-      test "tick calls tick_fn and pushes draw", %{socket: socket} do
+      test "animate with canvas_assign", %{socket: socket} do
+        socket = assign(socket, :canvas, nil)
+        tick_fn = fn count ->
+          canvas = Easel.new(100, 100) |> Easel.API.fill_rect(0, 0, count, count)
+          {canvas, count + 1}
+        end
+
+        socket = Easel.LiveView.animate(socket, "c1", :counter, tick_fn, canvas_assign: :canvas)
+
+        anim = socket.assigns[:easel_anim_c1]
+        assert anim.canvas_assign == :canvas
+      end
+
+      test "tick calls tick_fn and updates state", %{socket: socket} do
         tick_fn = fn count ->
           canvas = Easel.new(100, 100) |> Easel.API.fill_rect(0, 0, count, count)
           {canvas, count + 1}
@@ -253,10 +265,19 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
 
         # Counter should have advanced
         assert socket.assigns.counter == 1
+      end
 
-        # Should have pushed clear + draw events
-        events = socket.private.live_temp[:push_events]
-        assert [["easel:anim-canvas:draw", %{ops: _}], ["easel:anim-canvas:clear", %{}] | _] = events
+      test "tick updates canvas_assign when set", %{socket: socket} do
+        socket = assign(socket, :canvas, nil)
+        tick_fn = fn count ->
+          canvas = Easel.new(100, 100) |> Easel.API.fill_rect(0, 0, count, count)
+          {canvas, count + 1}
+        end
+
+        socket = Easel.LiveView.animate(socket, "c1", :counter, tick_fn, canvas_assign: :canvas)
+        socket = Easel.LiveView.tick(socket, "c1")
+
+        assert %Easel{ops: [_ | _]} = socket.assigns.canvas
       end
 
       test "stop_animation sets running to false", %{socket: socket} do

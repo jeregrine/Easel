@@ -29,7 +29,7 @@ defmodule Easel do
     * Custom — consume `canvas.ops` directly in your own renderer
   """
 
-  defstruct width: nil, height: nil, ops: []
+  defstruct width: nil, height: nil, ops: [], rendered: false
 
   @doc "Creates a new canvas with no dimensions set."
   def new do
@@ -50,15 +50,18 @@ defmodule Easel do
   Most users should use `Easel.API` functions instead of this directly.
   """
   def push_op(%Easel{} = ctx, op) do
-    Map.update!(ctx, :ops, fn ops -> [op | ops] end)
+    %{ctx | ops: [op | ctx.ops], rendered: false}
   end
 
   @doc """
   Finalizes the canvas by reversing the ops list into execution order.
 
   Must be called before passing the canvas to a backend for rendering.
+  Safe to call multiple times — subsequent calls are no-ops.
   """
+  def render(%Easel{rendered: true} = ctx), do: ctx
+
   def render(%Easel{} = ctx) do
-    Map.update!(ctx, :ops, fn ops -> Enum.reverse(ops) end)
+    %{ctx | ops: Enum.reverse(ctx.ops), rendered: true}
   end
 end
