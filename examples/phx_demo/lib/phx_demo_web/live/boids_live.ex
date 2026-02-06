@@ -4,6 +4,7 @@ defmodule PhxDemoWeb.BoidsLive do
 
   @width PhxDemo.Examples.boids_width()
   @height PhxDemo.Examples.boids_height()
+  @max_boids 500
 
   def mount(_params, _session, socket) do
     boids = PhxDemo.Examples.boids_init()
@@ -23,6 +24,7 @@ defmodule PhxDemoWeb.BoidsLive do
       |> assign(:background, background)
       |> assign(:width, @width)
       |> assign(:height, @height)
+      |> assign(:max_boids, @max_boids)
       |> Easel.LiveView.animate("fg", :boids, fn boids ->
         new_boids = PhxDemo.Examples.boids_tick(boids)
         canvas = render_boids(new_boids)
@@ -37,20 +39,26 @@ defmodule PhxDemoWeb.BoidsLive do
   end
 
   def handle_event("fg:click", %{"x" => x, "y" => y}, socket) do
-    new_boids =
-      for _ <- 1..10 do
-        angle = :rand.uniform() * 2 * :math.pi()
-        speed = 2.0 + :rand.uniform() * 2.0
+    current = socket.assigns.boids
 
-        %{
-          x: x * 1.0,
-          y: y * 1.0,
-          vx: :math.cos(angle) * speed,
-          vy: :math.sin(angle) * speed
-        }
-      end
+    if length(current) >= @max_boids do
+      {:noreply, socket}
+    else
+      new_boids =
+        for _ <- 1..10 do
+          angle = :rand.uniform() * 2 * :math.pi()
+          speed = 2.0 + :rand.uniform() * 2.0
 
-    {:noreply, assign(socket, :boids, new_boids ++ socket.assigns.boids)}
+          %{
+            x: x * 1.0,
+            y: y * 1.0,
+            vx: :math.cos(angle) * speed,
+            vy: :math.sin(angle) * speed
+          }
+        end
+
+      {:noreply, assign(socket, :boids, Enum.take(new_boids ++ current, @max_boids))}
+    end
   end
 
   # Render boids using templates + instances.
@@ -86,7 +94,7 @@ defmodule PhxDemoWeb.BoidsLive do
         <:layer id="fg" ops={@canvas.ops} templates={@canvas.templates} on_click />
       </Easel.LiveView.canvas_stack>
       <p class="text-sm text-gray-500 mt-2">
-        <%= length(@boids) %> boids
+        <%= length(@boids) %> / <%= @max_boids %> boids
       </p>
     </.demo>
     """
