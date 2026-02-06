@@ -333,6 +333,9 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       end
     end
 
-    defp animation_key(id), do: String.to_atom("easel_anim_#{id}")
+    defp animation_key(id) do
+      safe = String.replace(id, ~r/[^a-zA-Z0-9_]/, "_")
+      String.to_atom("easel_anim_#{safe}")
+    end
   end
 end
