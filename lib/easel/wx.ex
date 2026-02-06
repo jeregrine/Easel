@@ -493,6 +493,9 @@ defmodule Easel.WX do
           event_handlers: event_handlers
         }
 
+        # Force a repaint after init completes to avoid race with initial show
+        :wxPanel.refresh(panel)
+
         {frame, state}
       end)
     end
