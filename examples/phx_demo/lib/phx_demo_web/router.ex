@@ -18,5 +18,6 @@ defmodule PhxDemoWeb.Router do
     live "/boids", BoidsLive
     live "/matrix", MatrixLive
     live "/life", LifeLive
+    live "/lissajous", LissajousLive
   end
 end

@@ -26,7 +26,10 @@ defmodule PhxDemoWeb.MatrixLive do
           new_state = PhxDemo.Examples.matrix_tick(state)
           canvas = PhxDemo.Examples.matrix_render(new_state)
           {canvas, new_state}
-        end, interval: 50, canvas_assign: :canvas)
+        end,
+        interval: 50,
+        canvas_assign: :canvas
+      )
 
     {:ok, socket}
   end

@@ -12,10 +12,13 @@ defmodule PhxDemoWeb.LifeLive do
       |> assign(:canvas, PhxDemo.Examples.life_render(life))
       |> assign(:background, PhxDemo.Examples.life_render_background())
       |> assign(:cell, PhxDemo.Examples.life_cell())
-      |> Easel.LiveView.animate("fg", :life, fn life ->
-        next = if life.running, do: PhxDemo.Examples.life_tick(life), else: life
-        {PhxDemo.Examples.life_render(next), next}
-      end, interval: @interval, canvas_assign: :canvas)
+      |> Easel.LiveView.animate(
+        "fg",
+        :life,
+        fn life ->
+          next = if life.running, do: PhxDemo.Examples.life_tick(life), else: life
+          {PhxDemo.Examples.life_render(next), next}
+        end, interval: @interval, canvas_assign: :canvas)
 
     {:ok, socket}
   end
@@ -42,12 +45,16 @@ defmodule PhxDemoWeb.LifeLive do
   def handle_event("randomize", _, socket) do
     running = socket.assigns.life.running
     life = PhxDemo.Examples.life_init() |> Map.put(:running, running)
-    {:noreply, socket |> assign(:life, life) |> assign(:canvas, PhxDemo.Examples.life_render(life))}
+
+    {:noreply,
+     socket |> assign(:life, life) |> assign(:canvas, PhxDemo.Examples.life_render(life))}
   end
 
   def handle_event("clear", _, socket) do
     life = %{socket.assigns.life | alive: MapSet.new()}
-    {:noreply, socket |> assign(:life, life) |> assign(:canvas, PhxDemo.Examples.life_render(life))}
+
+    {:noreply,
+     socket |> assign(:life, life) |> assign(:canvas, PhxDemo.Examples.life_render(life))}
   end
 
   def render(assigns) do
@@ -55,7 +62,7 @@ defmodule PhxDemoWeb.LifeLive do
     <.demo title="Game of Life">
       <div class="flex gap-2 mb-3">
         <button phx-click="toggle" class="px-3 py-1 border rounded text-sm">
-          <%= if @life.running, do: "Pause", else: "Run" %>
+          {if @life.running, do: "Pause", else: "Run"}
         </button>
         <button phx-click="randomize" class="px-3 py-1 border rounded text-sm">Randomize</button>
         <button phx-click="clear" class="px-3 py-1 border rounded text-sm">Clear</button>
@@ -67,7 +74,7 @@ defmodule PhxDemoWeb.LifeLive do
       </Easel.LiveView.canvas_stack>
 
       <p class="text-sm text-gray-500 mt-2">
-        {MapSet.size(@life.alive)} live cells · <%= if @life.running, do: "running", else: "paused" %>
+        {MapSet.size(@life.alive)} live cells · {if @life.running, do: "running", else: "paused"}
       </p>
     </.demo>
     """

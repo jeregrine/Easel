@@ -72,6 +72,13 @@ defmodule PhxDemoWeb.DemoLive do
             <h3 class="font-semibold">🧬 Life</h3>
             <p class="text-sm text-gray-500">Conway's Game of Life</p>
           </.link>
+          <.link
+            navigate="/lissajous"
+            class="block p-4 border rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <h3 class="font-semibold">〰️ Lissajous</h3>
+            <p class="text-sm text-gray-500">Colorful harmonic curves</p>
+          </.link>
         </div>
       </div>
 
