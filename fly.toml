@@ -12,7 +12,7 @@ primary_region = 'ord'
 
 [env]
   PHX_HOST = "easel-demo.fly.dev"
-  FLY_MACHINE_SIZE = "performance-cpu-1x / 512mb"
+  FLY_MACHINE_SIZE = "performance-cpu-1x / 1gb"
 
 [http_service]
   internal_port = 4000
@@ -23,7 +23,7 @@ primary_region = 'ord'
   processes = ['app']
 
 [[vm]]
-  memory = '512mb'
+  memory = '1gb'
   cpu_kind = 'performance'
   cpus = 1
   count = 1
