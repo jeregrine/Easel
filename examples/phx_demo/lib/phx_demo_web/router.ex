@@ -19,5 +19,8 @@ defmodule PhxDemoWeb.Router do
     live "/matrix", MatrixLive
     live "/life", LifeLive
     live "/lissajous", LissajousLive
+    live "/flow", FlowFieldLive
+    live "/wave", WaveGridLive
+    live "/pathfinding", PathfindingLive
   end
 end

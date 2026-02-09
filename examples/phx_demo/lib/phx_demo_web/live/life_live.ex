@@ -18,7 +18,10 @@ defmodule PhxDemoWeb.LifeLive do
         fn life ->
           next = if life.running, do: PhxDemo.Examples.life_tick(life), else: life
           {PhxDemo.Examples.life_render(next), next}
-        end, interval: @interval, canvas_assign: :canvas)
+        end,
+        interval: @interval,
+        canvas_assign: :canvas
+      )
 
     {:ok, socket}
   end

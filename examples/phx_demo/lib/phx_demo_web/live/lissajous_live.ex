@@ -15,7 +15,10 @@ defmodule PhxDemoWeb.LissajousLive do
         fn t ->
           t2 = t + 2
           {PhxDemo.Examples.Lissajous.render(t2), t2}
-        end, interval: 33, canvas_assign: :canvas)
+        end,
+        interval: 33,
+        canvas_assign: :canvas
+      )
 
     {:ok, socket}
   end

@@ -43,7 +43,7 @@ defmodule PhxDemoWeb.DemoLive do
 
       <div class="mb-8">
         <h2 class="text-xl font-semibold mb-4">Animated</h2>
-        <div class="flex gap-4">
+        <div class="flex flex-wrap gap-4">
           <.link
             navigate="/clock"
             class="block p-4 border rounded-lg hover:bg-gray-50 transition-colors"
@@ -78,6 +78,27 @@ defmodule PhxDemoWeb.DemoLive do
           >
             <h3 class="font-semibold">〰️ Lissajous</h3>
             <p class="text-sm text-gray-500">Colorful harmonic curves</p>
+          </.link>
+          <.link
+            navigate="/flow"
+            class="block p-4 border rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <h3 class="font-semibold">🌪️ Flow Field</h3>
+            <p class="text-sm text-gray-500">Thousands of particles in a vector field</p>
+          </.link>
+          <.link
+            navigate="/wave"
+            class="block p-4 border rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <h3 class="font-semibold">🌊 Wave Grid</h3>
+            <p class="text-sm text-gray-500">Interference pattern playground</p>
+          </.link>
+          <.link
+            navigate="/pathfinding"
+            class="block p-4 border rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <h3 class="font-semibold">🧭 Pathfinding</h3>
+            <p class="text-sm text-gray-500">Draw walls and watch BFS solve</p>
           </.link>
         </div>
       </div>
