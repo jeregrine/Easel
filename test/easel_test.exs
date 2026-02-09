@@ -211,7 +211,16 @@ defmodule EaselTest do
         Easel.new(100, 100)
         |> Easel.template(:t, fn c -> Easel.fill(c) end)
         |> Easel.instances(:t, [
-          %{x: 10, y: 20, rotate: 1.5, scale_x: 2.0, scale_y: 0.5, fill: "red", stroke: "blue", alpha: 0.5}
+          %{
+            x: 10,
+            y: 20,
+            rotate: 1.5,
+            scale_x: 2.0,
+            scale_y: 0.5,
+            fill: "red",
+            stroke: "blue",
+            alpha: 0.5
+          }
         ])
         |> Easel.render()
 
@@ -242,9 +251,17 @@ defmodule EaselTest do
       assert length(canvas.ops) == 10
 
       assert [
-        ["save", []], ["translate", [10, 20]], ["beginPath", []], ["fill", []], ["restore", []],
-        ["save", []], ["translate", [30, 40]], ["beginPath", []], ["fill", []], ["restore", []]
-      ] = canvas.ops
+               ["save", []],
+               ["translate", [10, 20]],
+               ["beginPath", []],
+               ["fill", []],
+               ["restore", []],
+               ["save", []],
+               ["translate", [30, 40]],
+               ["beginPath", []],
+               ["fill", []],
+               ["restore", []]
+             ] = canvas.ops
     end
 
     test "expand includes style and transform ops" do
@@ -257,15 +274,15 @@ defmodule EaselTest do
         |> Easel.expand()
 
       assert [
-        ["save", []],
-        ["translate", [5, 10]],
-        ["rotate", [1.0]],
-        ["scale", [2.0, 0.5]],
-        ["set", ["fillStyle", "red"]],
-        ["set", ["globalAlpha", 0.8]],
-        ["fill", []],
-        ["restore", []]
-      ] = canvas.ops
+               ["save", []],
+               ["translate", [5, 10]],
+               ["rotate", [1.0]],
+               ["scale", [2.0, 0.5]],
+               ["set", ["fillStyle", "red"]],
+               ["set", ["globalAlpha", 0.8]],
+               ["fill", []],
+               ["restore", []]
+             ] = canvas.ops
     end
 
     test "expand preserves non-instance ops" do
@@ -278,10 +295,13 @@ defmodule EaselTest do
         |> Easel.expand()
 
       assert [
-        ["set", ["fillStyle", "blue"]],
-        ["fillRect", [0, 0, 100, 100]],
-        ["save", []], ["translate", [50, 50]], ["fill", []], ["restore", []]
-      ] = canvas.ops
+               ["set", ["fillStyle", "blue"]],
+               ["fillRect", [0, 0, 100, 100]],
+               ["save", []],
+               ["translate", [50, 50]],
+               ["fill", []],
+               ["restore", []]
+             ] = canvas.ops
     end
 
     test "expand on canvas with no instances is a no-op" do

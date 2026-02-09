@@ -182,6 +182,4 @@ defmodule Easel.WXTest do
       assert weight == :wxFONTWEIGHT_NORMAL
     end
   end
-
-
 end

@@ -223,9 +223,42 @@ defmodule Easel do
           fill: "hsl(\#{hue}, 70%, 60%)"}
       end))
   """
-  def instances(%Easel{} = ctx, name, instance_data) when is_atom(name) and is_list(instance_data) do
+  def instances(%Easel{} = ctx, name, instance_data)
+      when is_atom(name) and is_list(instance_data) do
     push_op(ctx, ["__instances", [Atom.to_string(name), instance_data]])
   end
+
+  @doc """
+  Draws instances using a compact positional row format.
+
+  Row order is:
+  `[x, y, rotate, scale_x, scale_y, fill, stroke, alpha]`.
+
+  Trailing `nil` values are trimmed to reduce payload size.
+  """
+  def instances_compact(%Easel{} = ctx, name, instance_data)
+      when is_atom(name) and is_list(instance_data) do
+    rows = Enum.map(instance_data, &instance_to_row/1)
+    push_op(ctx, ["__instances_compact", [Atom.to_string(name), rows]])
+  end
+
+  defp instance_to_row(inst) when is_map(inst) do
+    [
+      Map.get(inst, :x),
+      Map.get(inst, :y),
+      Map.get(inst, :rotate),
+      Map.get(inst, :scale_x),
+      Map.get(inst, :scale_y),
+      Map.get(inst, :fill),
+      Map.get(inst, :stroke),
+      Map.get(inst, :alpha)
+    ]
+    |> Enum.reverse()
+    |> Enum.drop_while(&is_nil/1)
+    |> Enum.reverse()
+  end
+
+  defp instance_to_row(inst) when is_list(inst), do: inst
 
   @doc """
   Expands `__instances` ops into plain Canvas 2D ops.
@@ -250,34 +283,62 @@ defmodule Easel do
     expanded =
       Enum.flat_map(ctx.ops, fn
         ["__instances", [name, instances]] ->
-          tpl_ops = Map.get(ctx.templates, String.to_existing_atom(name), [])
-          Enum.flat_map(instances, fn inst ->
-            style_ops =
-              []
-              |> then(fn ops -> if inst[:fill], do: [["set", ["fillStyle", inst.fill]] | ops], else: ops end)
-              |> then(fn ops -> if inst[:stroke], do: [["set", ["strokeStyle", inst.stroke]] | ops], else: ops end)
-              |> then(fn ops -> if inst[:alpha], do: [["set", ["globalAlpha", inst.alpha]] | ops], else: ops end)
-              |> Enum.reverse()
+          expand_instances(name, instances, ctx.templates)
 
-            transform_ops =
-              [["translate", [inst[:x] || 0, inst[:y] || 0]]]
-              |> then(fn ops -> if inst[:rotate], do: ops ++ [["rotate", [inst.rotate]]], else: ops end)
-              |> then(fn ops ->
-                if inst[:scale_x] || inst[:scale_y] do
-                  ops ++ [["scale", [inst[:scale_x] || 1, inst[:scale_y] || 1]]]
-                else
-                  ops
-                end
-              end)
+        ["__instances_compact", [name, rows]] ->
+          instances =
+            Enum.map(rows, fn row ->
+              %{
+                x: Enum.at(row, 0),
+                y: Enum.at(row, 1),
+                rotate: Enum.at(row, 2),
+                scale_x: Enum.at(row, 3),
+                scale_y: Enum.at(row, 4),
+                fill: Enum.at(row, 5),
+                stroke: Enum.at(row, 6),
+                alpha: Enum.at(row, 7)
+              }
+            end)
 
-            [["save", []]] ++ transform_ops ++ style_ops ++ tpl_ops ++ [["restore", []]]
-          end)
+          expand_instances(name, instances, ctx.templates)
 
         op ->
           [op]
       end)
 
     %{ctx | ops: expanded}
+  end
+
+  defp expand_instances(name, instances, templates) do
+    tpl_ops = Map.get(templates, String.to_existing_atom(name), [])
+
+    Enum.flat_map(instances, fn inst ->
+      style_ops =
+        []
+        |> then(fn ops ->
+          if inst[:fill], do: [["set", ["fillStyle", inst.fill]] | ops], else: ops
+        end)
+        |> then(fn ops ->
+          if inst[:stroke], do: [["set", ["strokeStyle", inst.stroke]] | ops], else: ops
+        end)
+        |> then(fn ops ->
+          if inst[:alpha], do: [["set", ["globalAlpha", inst.alpha]] | ops], else: ops
+        end)
+        |> Enum.reverse()
+
+      transform_ops =
+        [["translate", [inst[:x] || 0, inst[:y] || 0]]]
+        |> then(fn ops -> if inst[:rotate], do: ops ++ [["rotate", [inst.rotate]]], else: ops end)
+        |> then(fn ops ->
+          if inst[:scale_x] || inst[:scale_y] do
+            ops ++ [["scale", [inst[:scale_x] || 1, inst[:scale_y] || 1]]]
+          else
+            ops
+          end
+        end)
+
+      [["save", []]] ++ transform_ops ++ style_ops ++ tpl_ops ++ [["restore", []]]
+    end)
   end
 
   @doc """

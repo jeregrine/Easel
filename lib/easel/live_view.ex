@@ -171,18 +171,18 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
 
     Any additional attributes are passed through to the `<canvas>` element.
     """
-    attr :id, :string, required: true
-    attr :width, :integer, default: nil
-    attr :height, :integer, default: nil
-    attr :ops, :list, default: []
-    attr :templates, :map, default: %{}
-    attr :class, :string, default: nil
-    attr :on_click, :boolean, default: false
-    attr :on_mouse_down, :boolean, default: false
-    attr :on_mouse_up, :boolean, default: false
-    attr :on_mouse_move, :boolean, default: false
-    attr :on_key_down, :boolean, default: false
-    attr :rest, :global
+    attr(:id, :string, required: true)
+    attr(:width, :integer, default: nil)
+    attr(:height, :integer, default: nil)
+    attr(:ops, :list, default: [])
+    attr(:templates, :map, default: %{})
+    attr(:class, :string, default: nil)
+    attr(:on_click, :boolean, default: false)
+    attr(:on_mouse_down, :boolean, default: false)
+    attr(:on_mouse_up, :boolean, default: false)
+    attr(:on_mouse_move, :boolean, default: false)
+    attr(:on_key_down, :boolean, default: false)
+    attr(:rest, :global)
 
     def canvas(assigns) do
       events =
@@ -223,6 +223,8 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
               try {
                 if (op === "__instances") {
                   this.drawInstances(args[0], args[1]);
+                } else if (op === "__instances_compact") {
+                  this.drawInstancesCompact(args[0], args[1]);
                 } else if (op === "set") {
                   ctx[args[0]] = args[1];
                 } else if (typeof ctx[op] === "function") {
@@ -248,6 +250,23 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
               if (inst.fill) ctx.fillStyle = inst.fill;
               if (inst.stroke) ctx.strokeStyle = inst.stroke;
               if (inst.alpha != null) ctx.globalAlpha = inst.alpha;
+              this.executeOps(tpl);
+              ctx.restore();
+            }
+          },
+          drawInstancesCompact(name, rows) {
+            const tpl = this.templates[name];
+            if (!tpl) { console.warn("[Easel] Unknown template:", name); return; }
+            const ctx = this.context;
+            for (const row of rows) {
+              ctx.save();
+              ctx.translate(row[0] ?? 0, row[1] ?? 0);
+              if (row[2] != null) ctx.rotate(row[2]);
+              if (row[3] != null || row[4] != null)
+                ctx.scale(row[3] ?? 1, row[4] ?? 1);
+              if (row[5]) ctx.fillStyle = row[5];
+              if (row[6]) ctx.strokeStyle = row[6];
+              if (row[7] != null) ctx.globalAlpha = row[7];
               this.executeOps(tpl);
               ctx.restore();
             }
@@ -366,11 +385,11 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
           Export PNG
         </Easel.LiveView.export_button>
     """
-    attr :for, :string, required: true
-    attr :filename, :string, default: "canvas.png"
-    attr :class, :string, default: nil
-    attr :rest, :global
-    slot :inner_block, required: true
+    attr(:for, :string, required: true)
+    attr(:filename, :string, default: "canvas.png")
+    attr(:class, :string, default: nil)
+    attr(:rest, :global)
+    slot(:inner_block, required: true)
 
     def export_button(assigns) do
       ~H"""
@@ -457,21 +476,21 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
     Only the topmost layer with event flags will receive pointer events.
     Lower layers have `pointer-events: none` by default.
     """
-    attr :id, :string, required: true
-    attr :width, :integer, required: true
-    attr :height, :integer, required: true
-    attr :class, :string, default: nil
-    attr :rest, :global
+    attr(:id, :string, required: true)
+    attr(:width, :integer, required: true)
+    attr(:height, :integer, required: true)
+    attr(:class, :string, default: nil)
+    attr(:rest, :global)
 
     slot :layer, required: true do
-      attr :id, :string, required: true
-      attr :ops, :list
-      attr :templates, :map
-      attr :on_click, :boolean
-      attr :on_mouse_down, :boolean
-      attr :on_mouse_up, :boolean
-      attr :on_mouse_move, :boolean
-      attr :on_key_down, :boolean
+      attr(:id, :string, required: true)
+      attr(:ops, :list)
+      attr(:templates, :map)
+      attr(:on_click, :boolean)
+      attr(:on_mouse_down, :boolean)
+      attr(:on_mouse_up, :boolean)
+      attr(:on_mouse_move, :boolean)
+      attr(:on_key_down, :boolean)
     end
 
     def canvas_stack(assigns) do

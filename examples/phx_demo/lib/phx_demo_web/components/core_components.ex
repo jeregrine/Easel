@@ -504,8 +504,8 @@ defmodule PhxDemoWeb.CoreComponents do
       <.link navigate="/" class="text-blue-600 hover:underline text-sm mb-4 inline-block">
         ← Back to all demos
       </.link>
-      <h1 class="text-2xl font-bold mb-4"><%= @title %></h1>
-      <%= render_slot(@inner_block) %>
+      <h1 class="text-2xl font-bold mb-4">{@title}</h1>
+      {render_slot(@inner_block)}
     </div>
     """
   end

@@ -198,6 +198,7 @@ defmodule Easel.WX do
 
   defp hsl_to_rgb(h, s, l, a) do
     h = h / 360.0
+
     {r, g, b} =
       if s == 0.0 do
         {l, l, l}
@@ -211,11 +212,12 @@ defmodule Easel.WX do
   end
 
   defp hue_to_rgb(p, q, t) do
-    t = cond do
-      t < 0 -> t + 1
-      t > 1 -> t - 1
-      true -> t
-    end
+    t =
+      cond do
+        t < 0 -> t + 1
+        t > 1 -> t - 1
+        true -> t
+      end
 
     cond do
       t < 1 / 6 -> p + (q - p) * 6 * t
@@ -309,11 +311,17 @@ defmodule Easel.WX do
     # Callers pass atoms like :wxPENSTYLE_TRANSPARENT and get back integers.
     defp wx_const(atom) when is_atom(atom), do: :wxe_util.get_const(atom)
 
-
-
     defstruct [
-      :frame, :panel, :bitmap, :ops, :width, :height,
-      :animate_fn, :animate_state, :event_handlers,
+      :frame,
+      :panel,
+      :bitmap,
+      :ops,
+      :width,
+      :height,
+      :animate_fn,
+      :animate_state,
+      :event_handlers,
+      :interval,
       dpr: 1.0
     ]
 
@@ -487,7 +495,7 @@ defmodule Easel.WX do
         :wxFrame.show(frame)
 
         if animate_fn do
-          :timer.send_interval(interval, :tick)
+          Process.send_after(self(), :tick, interval)
         end
 
         state = %__MODULE__{
@@ -500,7 +508,8 @@ defmodule Easel.WX do
           dpr: dpr,
           animate_fn: animate_fn,
           animate_state: animate_state,
-          event_handlers: event_handlers
+          event_handlers: event_handlers,
+          interval: interval
         }
 
         # Force a repaint after init completes to avoid race with initial show
@@ -519,6 +528,7 @@ defmodule Easel.WX do
           IO.puts("PAINT ERROR: #{Exception.message(e)}")
           IO.puts(Exception.format_stacktrace(__STACKTRACE__))
       end
+
       :ok
     end
 
@@ -545,7 +555,16 @@ defmodule Easel.WX do
     end
 
     def handle_event(
-          wx(event: wxKey(keyCode: key, controlDown: ctrl, shiftDown: shift, altDown: alt, metaDown: meta)),
+          wx(
+            event:
+              wxKey(
+                keyCode: key,
+                controlDown: ctrl,
+                shiftDown: shift,
+                altDown: alt,
+                metaDown: meta
+              )
+          ),
           state
         ) do
       key_event = %{key: key, ctrl: ctrl, shift: shift, alt: alt, meta: meta}
@@ -553,7 +572,10 @@ defmodule Easel.WX do
       {:noreply, state}
     end
 
-    def handle_event(wx(id: @wx_id_export, event: {:wxCommand, :command_menu_selected, _, _, _}), state) do
+    def handle_event(
+          wx(id: @wx_id_export, event: {:wxCommand, :command_menu_selected, _, _, _}),
+          state
+        ) do
       export_image(state)
       {:noreply, state}
     end
@@ -569,6 +591,8 @@ defmodule Easel.WX do
       new_state = %{state | ops: canvas.ops, animate_state: new_animate_state}
 
       :wxFrame.refresh(state.frame, eraseBackground: false)
+
+      if state.animate_fn, do: Process.send_after(self(), :tick, state.interval || 16)
 
       {:noreply, new_state}
     end
@@ -594,20 +618,25 @@ defmodule Easel.WX do
     end
 
     defp export_image(%__MODULE__{frame: frame, bitmap: bitmap}) do
-      dialog = :wxFileDialog.new(frame, [
-        {:message, ~c"Export to Image"},
-        {:defaultFile, ~c"canvas.png"},
-        {:style, Bitwise.bor(0x0002, 0x0004)}  # wxFD_SAVE | wxFD_OVERWRITE_PROMPT
-      ])
+      dialog =
+        :wxFileDialog.new(frame, [
+          {:message, ~c"Export to Image"},
+          {:defaultFile, ~c"canvas.png"},
+          # wxFD_SAVE | wxFD_OVERWRITE_PROMPT
+          {:style, Bitwise.bor(0x0002, 0x0004)}
+        ])
+
       :wxFileDialog.setWildcard(dialog, ~c"PNG files (*.png)|*.png")
 
       case :wxFileDialog.showModal(dialog) do
-        5100 ->  # wxID_OK
+        # wxID_OK
+        5100 ->
           path = :wxFileDialog.getPath(dialog) |> List.to_string()
           path = if String.ends_with?(path, ".png"), do: path, else: path <> ".png"
           image = :wxBitmap.convertToImage(bitmap)
           :wxImage.saveFile(image, String.to_charlist(path), @wx_bitmap_type_png)
           :wxImage.destroy(image)
+
         _ ->
           :ok
       end
@@ -649,7 +678,14 @@ defmodule Easel.WX do
 
     # ── Painting (double buffered) ──────────────────────────────────
 
-    defp paint(%__MODULE__{panel: panel, bitmap: bitmap, ops: ops, width: width, height: height, dpr: dpr}) do
+    defp paint(%__MODULE__{
+           panel: panel,
+           bitmap: bitmap,
+           ops: ops,
+           width: width,
+           height: height,
+           dpr: dpr
+         }) do
       panel_dc = :wxPaintDC.new(panel)
       bitmap_dc = :wxMemoryDC.new(bitmap)
 
@@ -733,18 +769,19 @@ defmodule Easel.WX do
     defp execute_op(["reset", []], state) do
       :wxGraphicsContext.setTransform(state.gc, :wxGraphicsContext.createMatrix(state.gc))
 
-      %{state |
-        path: nil,
-        fill_style: {0, 0, 0, 255},
-        stroke_style: {0, 0, 0, 255},
-        line_width: 1.0,
-        line_cap: :wxCAP_BUTT,
-        line_join: :wxJOIN_MITER,
-        font_size: 10,
-        font_face: ~c"sans-serif",
-        global_alpha: 1.0,
-        saved: [],
-        line_dash: []
+      %{
+        state
+        | path: nil,
+          fill_style: {0, 0, 0, 255},
+          stroke_style: {0, 0, 0, 255},
+          line_width: 1.0,
+          line_cap: :wxCAP_BUTT,
+          line_join: :wxJOIN_MITER,
+          font_size: 10,
+          font_face: ~c"sans-serif",
+          global_alpha: 1.0,
+          saved: [],
+          line_dash: []
       }
     end
 
@@ -797,22 +834,58 @@ defmodule Easel.WX do
 
     defp execute_op(["fillRect", [x, y, w, h]], state) do
       apply_brush(state)
-      :wxGraphicsContext.setPen(state.gc, :wxPen.new({0, 0, 0, 0}, width: 0, style: wx_const(:wxPENSTYLE_TRANSPARENT)))
-      :wxGraphicsContext.drawRectangle(state.gc, to_float(x), to_float(y), to_float(w), to_float(h))
+
+      :wxGraphicsContext.setPen(
+        state.gc,
+        :wxPen.new({0, 0, 0, 0}, width: 0, style: wx_const(:wxPENSTYLE_TRANSPARENT))
+      )
+
+      :wxGraphicsContext.drawRectangle(
+        state.gc,
+        to_float(x),
+        to_float(y),
+        to_float(w),
+        to_float(h)
+      )
+
       state
     end
 
     defp execute_op(["strokeRect", [x, y, w, h]], state) do
       apply_pen(state)
-      :wxGraphicsContext.setBrush(state.gc, :wxBrush.new({0, 0, 0, 0}, style: wx_const(:wxBRUSHSTYLE_TRANSPARENT)))
-      :wxGraphicsContext.drawRectangle(state.gc, to_float(x), to_float(y), to_float(w), to_float(h))
+
+      :wxGraphicsContext.setBrush(
+        state.gc,
+        :wxBrush.new({0, 0, 0, 0}, style: wx_const(:wxBRUSHSTYLE_TRANSPARENT))
+      )
+
+      :wxGraphicsContext.drawRectangle(
+        state.gc,
+        to_float(x),
+        to_float(y),
+        to_float(w),
+        to_float(h)
+      )
+
       state
     end
 
     defp execute_op(["clearRect", [x, y, w, h]], state) do
       :wxGraphicsContext.setBrush(state.gc, :wxBrush.new({255, 255, 255, 255}))
-      :wxGraphicsContext.setPen(state.gc, :wxPen.new({0, 0, 0, 0}, width: 0, style: wx_const(:wxPENSTYLE_TRANSPARENT)))
-      :wxGraphicsContext.drawRectangle(state.gc, to_float(x), to_float(y), to_float(w), to_float(h))
+
+      :wxGraphicsContext.setPen(
+        state.gc,
+        :wxPen.new({0, 0, 0, 0}, width: 0, style: wx_const(:wxPENSTYLE_TRANSPARENT))
+      )
+
+      :wxGraphicsContext.drawRectangle(
+        state.gc,
+        to_float(x),
+        to_float(y),
+        to_float(w),
+        to_float(h)
+      )
+
       state
     end
 
@@ -847,9 +920,12 @@ defmodule Easel.WX do
 
       :wxGraphicsPath.addCurveToPoint(
         state.path,
-        to_float(cp1x), to_float(cp1y),
-        to_float(cp2x), to_float(cp2y),
-        to_float(x), to_float(y)
+        to_float(cp1x),
+        to_float(cp1y),
+        to_float(cp2x),
+        to_float(cp2y),
+        to_float(x),
+        to_float(y)
       )
 
       state
@@ -860,8 +936,10 @@ defmodule Easel.WX do
 
       :wxGraphicsPath.addQuadCurveToPoint(
         state.path,
-        to_float(cpx), to_float(cpy),
-        to_float(x), to_float(y)
+        to_float(cpx),
+        to_float(cpy),
+        to_float(x),
+        to_float(y)
       )
 
       state
@@ -876,8 +954,11 @@ defmodule Easel.WX do
 
       :wxGraphicsPath.addArc(
         state.path,
-        to_float(cx), to_float(cy), to_float(radius),
-        to_float(start_angle), to_float(end_angle),
+        to_float(cx),
+        to_float(cy),
+        to_float(radius),
+        to_float(start_angle),
+        to_float(end_angle),
         clockwise
       )
 
@@ -911,8 +992,10 @@ defmodule Easel.WX do
 
       :wxGraphicsPath.addArcToPoint(
         state.path,
-        to_float(x1), to_float(y1),
-        to_float(x2), to_float(y2),
+        to_float(x1),
+        to_float(y1),
+        to_float(x2),
+        to_float(y2),
         to_float(radius)
       )
 
@@ -925,8 +1008,10 @@ defmodule Easel.WX do
 
       :wxGraphicsPath.addRoundedRectangle(
         state.path,
-        to_float(x), to_float(y),
-        to_float(w), to_float(h),
+        to_float(x),
+        to_float(y),
+        to_float(w),
+        to_float(h),
         to_float(r)
       )
 
@@ -957,7 +1042,14 @@ defmodule Easel.WX do
       apply_font(state)
       apply_brush(state)
       {dx, dy} = text_offset(state, text)
-      :wxGraphicsContext.drawText(state.gc, String.to_charlist(text), to_float(x) + dx, to_float(y) + dy)
+
+      :wxGraphicsContext.drawText(
+        state.gc,
+        String.to_charlist(text),
+        to_float(x) + dx,
+        to_float(y) + dy
+      )
+
       state
     end
 
@@ -965,7 +1057,14 @@ defmodule Easel.WX do
       apply_font(state)
       apply_brush(state)
       {dx, dy} = text_offset(state, text)
-      :wxGraphicsContext.drawText(state.gc, String.to_charlist(text), to_float(x) + dx, to_float(y) + dy)
+
+      :wxGraphicsContext.drawText(
+        state.gc,
+        String.to_charlist(text),
+        to_float(x) + dx,
+        to_float(y) + dy
+      )
+
       state
     end
 

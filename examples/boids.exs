@@ -1,23 +1,19 @@
 # Boids flocking simulation
 # Run: mix run examples/boids.exs
 #
-# Uses Easel.WX.animate/5 to run at ~60fps in a native window.
-# Requires Erlang compiled with wx support.
-#
-# Rules:
-#   1. Separation — steer away from nearby boids
-#   2. Alignment  — steer toward average heading of nearby boids
-#   3. Cohesion   — steer toward average position of nearby boids
-
+# Uses Easel.WX.animate/5 to run in a native window when wx is available.
+# Falls back to a headless simulation otherwise.
 
 defmodule Boids do
   @width 800
   @height 600
   @num_boids 100
+  @max_boids 500
   @max_speed 4.0
   @max_force 0.1
   @perception 50.0
   @separation_dist 25.0
+  @cell_size trunc(@perception)
 
   defstruct [:x, :y, :vx, :vy]
 
@@ -39,25 +35,47 @@ defmodule Boids do
   end
 
   def tick(boids) do
+    grid = build_grid(boids)
+
     Enum.map(boids, fn boid ->
       boid
-      |> apply_rules(boids)
+      |> apply_rules(grid)
       |> limit_speed()
       |> move()
       |> wrap()
     end)
   end
 
-  defp apply_rules(boid, boids) do
+  # Spatial hash grid: only inspect nearby cells instead of all boids.
+  defp build_grid(boids) do
+    Enum.reduce(boids, %{}, fn boid, grid ->
+      key = {trunc(boid.x / @cell_size), trunc(boid.y / @cell_size)}
+      Map.update(grid, key, [boid], &[boid | &1])
+    end)
+  end
+
+  defp neighbors(boid, grid) do
+    cx = trunc(boid.x / @cell_size)
+    cy = trunc(boid.y / @cell_size)
+
+    for dx <- -1..1, dy <- -1..1, reduce: [] do
+      acc -> Map.get(grid, {cx + dx, cy + dy}, []) ++ acc
+    end
+  end
+
+  defp apply_rules(boid, grid) do
+    nearby = neighbors(boid, grid)
+
     {sep_x, sep_y, ali_x, ali_y, coh_x, coh_y, count} =
-      Enum.reduce(boids, {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0}, fn other,
-                                                               {sx, sy, ax, ay, cx, cy, n} ->
+      Enum.reduce(nearby, {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0}, fn other,
+                                                                {sx, sy, ax, ay, cx, cy, n} ->
         dx = other.x - boid.x
         dy = other.y - boid.y
-        dist = :math.sqrt(dx * dx + dy * dy)
+        dist_sq = dx * dx + dy * dy
 
-        if dist > 0 and dist < @perception do
-          # Separation
+        if dist_sq > 0 and dist_sq < @perception * @perception do
+          dist = :math.sqrt(dist_sq)
+
           {sx2, sy2} =
             if dist < @separation_dist do
               {sx - dx / dist, sy - dy / dist}
@@ -72,10 +90,10 @@ defmodule Boids do
       end)
 
     if count > 0 do
-      # Alignment — steer toward average velocity
+      # Alignment
       {avx, avy} = steer(boid, ali_x / count, ali_y / count)
-      # Cohesion — steer toward average position
-      {cvx, cvy} = steer_to(boid, coh_x / count, coh_y / count)
+      # Cohesion
+      {cvx, cvy} = steer(boid, coh_x / count - boid.x, coh_y / count - boid.y)
       # Separation
       {svx, svy} = {sep_x * @max_force * 1.5, sep_y * @max_force * 1.5}
 
@@ -95,10 +113,6 @@ defmodule Boids do
     else
       {0.0, 0.0}
     end
-  end
-
-  defp steer_to(boid, tx, ty) do
-    steer(boid, tx - boid.x, ty - boid.y)
   end
 
   defp limit_vec(x, y, max) do
@@ -137,87 +151,92 @@ defmodule Boids do
     end
   end
 
+  # Batch render by hue buckets to reduce op count dramatically.
   def render(boids) do
     canvas =
       Easel.new(@width, @height)
       |> Easel.set_fill_style("#0a0a2e")
       |> Easel.fill_rect(0, 0, @width, @height)
 
-    Enum.reduce(boids, canvas, fn boid, acc ->
-      angle = :math.atan2(boid.vy, boid.vx)
-      size = 6
+    buckets =
+      Enum.group_by(boids, fn boid ->
+        angle = :math.atan2(boid.vy, boid.vx)
+        div(round(angle / :math.pi() * 180 + 180), 10) * 10
+      end)
 
-      # Triangle pointing in direction of travel
-      x1 = boid.x + :math.cos(angle) * size * 2
-      y1 = boid.y + :math.sin(angle) * size * 2
-      x2 = boid.x + :math.cos(angle + 2.5) * size
-      y2 = boid.y + :math.sin(angle + 2.5) * size
-      x3 = boid.x + :math.cos(angle - 2.5) * size
-      y3 = boid.y + :math.sin(angle - 2.5) * size
+    Enum.reduce(buckets, canvas, fn {hue, group}, acc ->
+      acc = Easel.set_fill_style(acc, "hsl(#{hue}, 70%, 60%)")
+      acc = Easel.begin_path(acc)
 
-      # Color based on heading
-      hue = round(angle / :math.pi() * 180 + 180)
+      acc =
+        Enum.reduce(group, acc, fn boid, acc ->
+          angle = :math.atan2(boid.vy, boid.vx)
+          size = 6
 
-      acc
-      |> Easel.begin_path()
-      |> Easel.move_to(x1, y1)
-      |> Easel.line_to(x2, y2)
-      |> Easel.line_to(x3, y3)
-      |> Easel.close_path()
-      |> Easel.set_fill_style("hsl(#{hue}, 70%, 60%)")
-      |> Easel.fill()
+          x1 = boid.x + :math.cos(angle) * size * 2
+          y1 = boid.y + :math.sin(angle) * size * 2
+          x2 = boid.x + :math.cos(angle + 2.5) * size
+          y2 = boid.y + :math.sin(angle + 2.5) * size
+          x3 = boid.x + :math.cos(angle - 2.5) * size
+          y3 = boid.y + :math.sin(angle - 2.5) * size
+
+          acc
+          |> Easel.move_to(x1, y1)
+          |> Easel.line_to(x2, y2)
+          |> Easel.line_to(x3, y3)
+          |> Easel.close_path()
+        end)
+
+      Easel.fill(acc)
     end)
+  end
+
+  def add_boids(boids, x, y, count \\ 10) do
+    burst =
+      for _ <- 1..count do
+        angle = :rand.uniform() * 2 * :math.pi()
+        speed = 2.0 + :rand.uniform() * 2.0
+
+        %Boids{
+          x: x * 1.0,
+          y: y * 1.0,
+          vx: :math.cos(angle) * speed,
+          vy: :math.sin(angle) * speed
+        }
+      end
+
+    Enum.take(burst ++ boids, @max_boids)
   end
 end
 
 :rand.seed(:exsss, {42, 42, 42})
 boids = Boids.init()
 
-# If wx is available, run the animation in a native window.
-# Click to add a burst of new boids at the cursor position.
-# Otherwise, just simulate a few frames and print stats.
 if Code.ensure_loaded?(Easel.WX) and Easel.WX.available?() do
   Easel.WX.animate(
     Boids.width(),
     Boids.height(),
     boids,
     fn boids ->
-      new_boids = Boids.tick(boids)
-      canvas = Boids.render(new_boids)
-      {canvas, new_boids}
+      next = Boids.tick(boids)
+      {Boids.render(next), next}
     end,
     title: "Boids — click to add",
     interval: 16,
-    on_click: fn x, y, boids ->
-      # Spawn 10 new boids at click position
-      new =
-        for _ <- 1..10 do
-          angle = :rand.uniform() * 2 * :math.pi()
-          speed = 2.0 + :rand.uniform() * 2.0
-
-          %{
-            x: x * 1.0,
-            y: y * 1.0,
-            vx: :math.cos(angle) * speed,
-            vy: :math.sin(angle) * speed
-          }
-        end
-
-      new ++ boids
-    end
+    on_click: fn x, y, boids -> Boids.add_boids(boids, x, y) end
   )
 else
   IO.puts("wx not available — simulating 60 frames...")
 
   Enum.reduce(1..60, boids, fn frame, boids ->
-    new_boids = Boids.tick(boids)
-    canvas = Boids.render(new_boids) |> Easel.render()
+    next = Boids.tick(boids)
+    canvas = Boids.render(next) |> Easel.render()
 
     if rem(frame, 10) == 0 do
       IO.puts("Frame #{frame}: #{length(canvas.ops)} ops")
     end
 
-    new_boids
+    next
   end)
 
   IO.puts("Done. Pipe to Easel.WX.animate/5 when wx is available.")

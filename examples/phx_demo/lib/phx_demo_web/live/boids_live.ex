@@ -1,7 +1,6 @@
 defmodule PhxDemoWeb.BoidsLive do
   use PhxDemoWeb, :live_view
 
-
   @width PhxDemo.Examples.boids_width()
   @height PhxDemo.Examples.boids_height()
   @max_boids 500
@@ -25,11 +24,17 @@ defmodule PhxDemoWeb.BoidsLive do
       |> assign(:width, @width)
       |> assign(:height, @height)
       |> assign(:max_boids, @max_boids)
-      |> Easel.LiveView.animate("fg", :boids, fn boids ->
-        new_boids = PhxDemo.Examples.boids_tick(boids)
-        canvas = render_boids(new_boids)
-        {canvas, new_boids}
-      end, interval: 33, canvas_assign: :canvas)
+      |> Easel.LiveView.animate(
+        "fg",
+        :boids,
+        fn boids ->
+          new_boids = PhxDemo.Examples.boids_tick(boids)
+          canvas = render_boids(new_boids)
+          {canvas, new_boids}
+        end,
+        interval: 33,
+        canvas_assign: :canvas
+      )
 
     {:ok, socket}
   end
@@ -82,7 +87,7 @@ defmodule PhxDemoWeb.BoidsLive do
       |> Easel.close_path()
       |> Easel.fill()
     end)
-    |> Easel.instances(:boid, instances)
+    |> Easel.instances_compact(:boid, instances)
     |> Easel.render()
   end
 
@@ -94,7 +99,7 @@ defmodule PhxDemoWeb.BoidsLive do
         <:layer id="fg" ops={@canvas.ops} templates={@canvas.templates} on_click />
       </Easel.LiveView.canvas_stack>
       <p class="text-sm text-gray-500 mt-2">
-        <%= length(@boids) %> / <%= @max_boids %> boids
+        {length(@boids)} / {@max_boids} boids
       </p>
     </.demo>
     """

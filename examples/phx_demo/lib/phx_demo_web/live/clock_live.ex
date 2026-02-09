@@ -8,11 +8,14 @@ defmodule PhxDemoWeb.ClockLive do
       socket
       |> assign(:time, Time.utc_now())
       |> assign(:canvas, canvas)
-      |> Easel.LiveView.animate("clock", :time, fn _time ->
-        now = Time.utc_now()
-        canvas = PhxDemo.Examples.clock(now)
-        {canvas, now}
-      end, interval: 1000, canvas_assign: :canvas)
+      |> Easel.LiveView.animate(
+        "clock",
+        :time,
+        fn _time ->
+          now = Time.utc_now()
+          canvas = PhxDemo.Examples.clock(now)
+          {canvas, now}
+        end, interval: 1000, canvas_assign: :canvas)
 
     {:ok, socket}
   end

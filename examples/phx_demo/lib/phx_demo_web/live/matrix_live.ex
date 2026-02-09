@@ -19,11 +19,14 @@ defmodule PhxDemoWeb.MatrixLive do
       |> assign(:state, state)
       |> assign(:canvas, canvas)
       |> assign(:background, background)
-      |> Easel.LiveView.animate("fg", :state, fn state ->
-        new_state = PhxDemo.Examples.matrix_tick(state)
-        canvas = PhxDemo.Examples.matrix_render(new_state)
-        {canvas, new_state}
-      end, interval: 50, canvas_assign: :canvas)
+      |> Easel.LiveView.animate(
+        "fg",
+        :state,
+        fn state ->
+          new_state = PhxDemo.Examples.matrix_tick(state)
+          canvas = PhxDemo.Examples.matrix_render(new_state)
+          {canvas, new_state}
+        end, interval: 50, canvas_assign: :canvas)
 
     {:ok, socket}
   end

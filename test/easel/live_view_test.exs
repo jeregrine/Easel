@@ -9,9 +9,10 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       test "renders a canvas element with id and hook" do
         assigns = %{}
 
-        html = rendered_to_string(~H"""
-          <Easel.LiveView.canvas id="test-canvas" width={300} height={200} />
-        """)
+        html =
+          rendered_to_string(~H"""
+            <Easel.LiveView.canvas id="test-canvas" width={300} height={200} />
+          """)
 
         assert html =~ ~s(id="test-canvas")
         assert html =~ ~s(phx-hook=")
@@ -22,9 +23,10 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       test "renders with empty ops by default" do
         assigns = %{}
 
-        html = rendered_to_string(~H"""
-          <Easel.LiveView.canvas id="test-canvas" width={100} height={100} />
-        """)
+        html =
+          rendered_to_string(~H"""
+            <Easel.LiveView.canvas id="test-canvas" width={100} height={100} />
+          """)
 
         assert html =~ ~s(data-ops="[]")
       end
@@ -34,9 +36,10 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
           ops: [["fillRect", [0, 0, 100, 100]], ["set", ["fillStyle", "red"]]]
         }
 
-        html = rendered_to_string(~H"""
-          <Easel.LiveView.canvas id="test-canvas" width={100} height={100} ops={@ops} />
-        """)
+        html =
+          rendered_to_string(~H"""
+            <Easel.LiveView.canvas id="test-canvas" width={100} height={100} ops={@ops} />
+          """)
 
         assert html =~ ~s(data-ops=")
         refute html =~ ~s(data-ops="[]")
@@ -45,9 +48,10 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       test "passes through class attribute" do
         assigns = %{}
 
-        html = rendered_to_string(~H"""
-          <Easel.LiveView.canvas id="test-canvas" width={100} height={100} class="my-canvas" />
-        """)
+        html =
+          rendered_to_string(~H"""
+            <Easel.LiveView.canvas id="test-canvas" width={100} height={100} class="my-canvas" />
+          """)
 
         assert html =~ ~s(class="my-canvas")
       end
@@ -55,9 +59,10 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       test "passes through global attributes" do
         assigns = %{}
 
-        html = rendered_to_string(~H"""
-          <Easel.LiveView.canvas id="test-canvas" width={100} height={100} style="border: 1px solid" />
-        """)
+        html =
+          rendered_to_string(~H"""
+            <Easel.LiveView.canvas id="test-canvas" width={100} height={100} style="border: 1px solid" />
+          """)
 
         assert html =~ ~s(style="border: 1px solid")
       end
@@ -65,9 +70,10 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       test "includes the colocated runtime hook script" do
         assigns = %{}
 
-        html = rendered_to_string(~H"""
-          <Easel.LiveView.canvas id="test-canvas" width={100} height={100} />
-        """)
+        html =
+          rendered_to_string(~H"""
+            <Easel.LiveView.canvas id="test-canvas" width={100} height={100} />
+          """)
 
         assert html =~ "<script"
         assert html =~ "executeOps"
@@ -78,9 +84,10 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       test "no events by default" do
         assigns = %{}
 
-        html = rendered_to_string(~H"""
-          <Easel.LiveView.canvas id="test-canvas" width={100} height={100} />
-        """)
+        html =
+          rendered_to_string(~H"""
+            <Easel.LiveView.canvas id="test-canvas" width={100} height={100} />
+          """)
 
         assert html =~ ~s(data-events="[]")
         refute html =~ ~s(tabindex)
@@ -89,9 +96,10 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       test "on_click enables click event" do
         assigns = %{}
 
-        html = rendered_to_string(~H"""
-          <Easel.LiveView.canvas id="test-canvas" width={100} height={100} on_click />
-        """)
+        html =
+          rendered_to_string(~H"""
+            <Easel.LiveView.canvas id="test-canvas" width={100} height={100} on_click />
+          """)
 
         assert html =~ ~s(click)
         assert html =~ ~s(data-events=")
@@ -101,9 +109,10 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       test "on_mouse_move enables mousemove event" do
         assigns = %{}
 
-        html = rendered_to_string(~H"""
-          <Easel.LiveView.canvas id="test-canvas" width={100} height={100} on_mouse_move />
-        """)
+        html =
+          rendered_to_string(~H"""
+            <Easel.LiveView.canvas id="test-canvas" width={100} height={100} on_mouse_move />
+          """)
 
         assert html =~ ~s(mousemove)
       end
@@ -111,9 +120,10 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       test "on_key_down adds tabindex for focus" do
         assigns = %{}
 
-        html = rendered_to_string(~H"""
-          <Easel.LiveView.canvas id="test-canvas" width={100} height={100} on_key_down />
-        """)
+        html =
+          rendered_to_string(~H"""
+            <Easel.LiveView.canvas id="test-canvas" width={100} height={100} on_key_down />
+          """)
 
         assert html =~ ~s(tabindex="0")
         assert html =~ ~s(keydown)
@@ -122,9 +132,10 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       test "multiple events" do
         assigns = %{}
 
-        html = rendered_to_string(~H"""
-          <Easel.LiveView.canvas id="test-canvas" width={100} height={100} on_click on_mouse_down on_mouse_up />
-        """)
+        html =
+          rendered_to_string(~H"""
+            <Easel.LiveView.canvas id="test-canvas" width={100} height={100} on_click on_mouse_down on_mouse_up />
+          """)
 
         assert html =~ ~s(click)
         assert html =~ ~s(mousedown)
@@ -243,6 +254,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
 
       test "animate with canvas_assign", %{socket: socket} do
         socket = assign(socket, :canvas, nil)
+
         tick_fn = fn count ->
           canvas = Easel.new(100, 100) |> Easel.fill_rect(0, 0, count, count)
           {canvas, count + 1}
@@ -269,6 +281,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
 
       test "tick updates canvas_assign when set", %{socket: socket} do
         socket = assign(socket, :canvas, nil)
+
         tick_fn = fn count ->
           canvas = Easel.new(100, 100) |> Easel.fill_rect(0, 0, count, count)
           {canvas, count + 1}
@@ -316,12 +329,13 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
           fg_ops: [["strokeRect", [10, 10, 50, 50]]]
         }
 
-        html = rendered_to_string(~H"""
-          <Easel.LiveView.canvas_stack id="game" width={800} height={600}>
-            <:layer id="bg" ops={@bg_ops} />
-            <:layer id="fg" ops={@fg_ops} />
-          </Easel.LiveView.canvas_stack>
-        """)
+        html =
+          rendered_to_string(~H"""
+            <Easel.LiveView.canvas_stack id="game" width={800} height={600}>
+              <:layer id="bg" ops={@bg_ops} />
+              <:layer id="fg" ops={@fg_ops} />
+            </Easel.LiveView.canvas_stack>
+          """)
 
         assert html =~ ~s(id="game")
         assert html =~ ~s(position: relative)
@@ -335,26 +349,29 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       test "each layer is an independent canvas with hook" do
         assigns = %{}
 
-        html = rendered_to_string(~H"""
-          <Easel.LiveView.canvas_stack id="stack" width={100} height={100}>
-            <:layer id="l1" ops={[]} />
-            <:layer id="l2" ops={[]} />
-          </Easel.LiveView.canvas_stack>
-        """)
+        html =
+          rendered_to_string(~H"""
+            <Easel.LiveView.canvas_stack id="stack" width={100} height={100}>
+              <:layer id="l1" ops={[]} />
+              <:layer id="l2" ops={[]} />
+            </Easel.LiveView.canvas_stack>
+          """)
 
         # Both layers get phx-hook
-        assert length(String.split(html, "phx-hook")) == 3  # 2 hooks + 1 = 3 parts
+        # 2 hooks + 1 = 3 parts
+        assert length(String.split(html, "phx-hook")) == 3
       end
 
       test "layers pass through event flags" do
         assigns = %{}
 
-        html = rendered_to_string(~H"""
-          <Easel.LiveView.canvas_stack id="stack" width={100} height={100}>
-            <:layer id="bg" ops={[]} />
-            <:layer id="fg" ops={[]} on_click />
-          </Easel.LiveView.canvas_stack>
-        """)
+        html =
+          rendered_to_string(~H"""
+            <Easel.LiveView.canvas_stack id="stack" width={100} height={100}>
+              <:layer id="bg" ops={[]} />
+              <:layer id="fg" ops={[]} on_click />
+            </Easel.LiveView.canvas_stack>
+          """)
 
         assert html =~ ~s(click)
       end
