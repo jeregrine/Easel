@@ -29,7 +29,7 @@ defmodule PhxDemoWeb.ClockLive do
 
   def render(assigns) do
     ~H"""
-    <.demo title="Clock">
+    <.demo title="Clock" code_id="clock">
       <Easel.LiveView.canvas id="clock" width={400} height={400} ops={@canvas.ops} />
     </.demo>
     """

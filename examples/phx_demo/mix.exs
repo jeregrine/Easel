@@ -58,6 +58,8 @@ defmodule PhxDemo.MixProject do
       {:telemetry_metrics, "~> 1.0"},
       {:telemetry_poller, "~> 1.0"},
       {:benchee, "~> 1.3", only: [:dev, :test]},
+      {:makeup, "~> 1.2"},
+      {:makeup_elixir, "~> 1.0"},
       {:dns_cluster, "~> 0.2.0"},
       {:bandit, "~> 1.5"}
     ]

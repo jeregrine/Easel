@@ -12,6 +12,17 @@ defmodule PhxDemoWeb.DemoLive do
     {:mandelbrot, "Mandelbrot Set", 200, 200}
   ]
 
+  @animated [
+    {"/clock", "⏰ Clock", "Animated analog clock"},
+    {"/boids", "🐦 Boids", "Flocking simulation"},
+    {"/matrix", "🟢 Matrix", "Matrix rain animation"},
+    {"/life", "🧬 Life", "Conway's Game of Life"},
+    {"/lissajous", "〰️ Lissajous", "Colorful harmonic curves"},
+    {"/flow", "🌪️ Flow Field", "Particle flow + vectors"},
+    {"/wave", "🌊 Wave Grid", "Interference pattern playground"},
+    {"/pathfinding", "🧭 Pathfinding", "Draw walls and watch BFS solve"}
+  ]
+
   def mount(_params, _session, socket) do
     socket =
       Enum.reduce(@examples, socket, fn {key, _title, _w, _h}, socket ->
@@ -20,7 +31,7 @@ defmodule PhxDemoWeb.DemoLive do
         end)
       end)
 
-    {:ok, assign(socket, :examples, @examples)}
+    {:ok, socket |> assign(:examples, @examples) |> assign(:animated, @animated)}
   end
 
   def render(assigns) do
@@ -39,67 +50,27 @@ defmodule PhxDemoWeb.DemoLive do
           </svg>
         </a>
       </div>
-      <p class="text-gray-600 mb-8">Canvas 2D rendering powered by Easel + Phoenix LiveView</p>
+      <p class="text-gray-600 mb-4">Canvas 2D rendering powered by Easel + Phoenix LiveView</p>
+
+      <div class="mb-8 rounded-lg border bg-gray-50 p-4 text-sm text-gray-700">
+        <p>
+          Pure Elixir drawing and animation with Phoenix LiveView or Wx backends. Data transfer and draw calls are optimized with compact payloads, templating, and instancing, so complex scenes stay responsive without writing manual JavaScript drawing code.
+        </p>
+        <p class="pt-4">
+          No new drawing DSL to learn: Easel uses the familiar Canvas 2D API across targets.
+        </p>
+      </div>
 
       <div class="mb-8">
         <h2 class="text-xl font-semibold mb-4">Animated</h2>
-        <div class="flex flex-wrap gap-4">
-          <.link
-            navigate="/clock"
-            class="block p-4 border rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            <h3 class="font-semibold">⏰ Clock</h3>
-            <p class="text-sm text-gray-500">Animated analog clock</p>
-          </.link>
-          <.link
-            navigate="/boids"
-            class="block p-4 border rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            <h3 class="font-semibold">🐦 Boids</h3>
-            <p class="text-sm text-gray-500">Flocking simulation</p>
-          </.link>
-          <.link
-            navigate="/matrix"
-            class="block p-4 border rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            <h3 class="font-semibold">🟢 Matrix</h3>
-            <p class="text-sm text-gray-500">Matrix rain animation</p>
-          </.link>
-          <.link
-            navigate="/life"
-            class="block p-4 border rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            <h3 class="font-semibold">🧬 Life</h3>
-            <p class="text-sm text-gray-500">Conway's Game of Life</p>
-          </.link>
-          <.link
-            navigate="/lissajous"
-            class="block p-4 border rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            <h3 class="font-semibold">〰️ Lissajous</h3>
-            <p class="text-sm text-gray-500">Colorful harmonic curves</p>
-          </.link>
-          <.link
-            navigate="/flow"
-            class="block p-4 border rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            <h3 class="font-semibold">🌪️ Flow Field</h3>
-            <p class="text-sm text-gray-500">Thousands of particles in a vector field</p>
-          </.link>
-          <.link
-            navigate="/wave"
-            class="block p-4 border rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            <h3 class="font-semibold">🌊 Wave Grid</h3>
-            <p class="text-sm text-gray-500">Interference pattern playground</p>
-          </.link>
-          <.link
-            navigate="/pathfinding"
-            class="block p-4 border rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            <h3 class="font-semibold">🧭 Pathfinding</h3>
-            <p class="text-sm text-gray-500">Draw walls and watch BFS solve</p>
-          </.link>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div :for={{path, title, desc} <- @animated} class="p-4 border rounded-lg">
+            <h3 class="font-semibold">{title}</h3>
+            <p class="text-sm text-gray-500 mb-3">{desc}</p>
+            <div class="flex items-center gap-3 text-sm">
+              <.link navigate={path} class="text-blue-600 hover:underline">Open demo</.link>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -119,17 +90,20 @@ defmodule PhxDemoWeb.DemoLive do
     """
   end
 
-  attr :key, :atom, required: true
-  attr :title, :string, required: true
-  attr :width, :integer, required: true
-  attr :height, :integer, required: true
-  attr :result, :any, required: true
+  attr(:key, :atom, required: true)
+  attr(:title, :string, required: true)
+  attr(:width, :integer, required: true)
+  attr(:height, :integer, required: true)
+  attr(:result, :any, required: true)
 
   defp async_example(%{result: %{ok?: true}} = assigns) do
     ~H"""
     <div class="min-w-0">
       <div class="flex items-center gap-2 mb-2">
         <h3 class="font-semibold text-lg">{@title}</h3>
+        <.link navigate={"/examples/#{@key}"} class="text-xs text-blue-600 hover:underline">
+          open
+        </.link>
         <Easel.LiveView.export_button
           for={@key}
           filename={"#{@key}.png"}
@@ -150,6 +124,9 @@ defmodule PhxDemoWeb.DemoLive do
     <div class="min-w-0">
       <div class="flex items-center gap-2 mb-2">
         <h3 class="font-semibold text-lg">{@title}</h3>
+        <.link navigate={"/examples/#{@key}"} class="text-xs text-blue-600 hover:underline">
+          open
+        </.link>
       </div>
       <div
         class="flex items-center justify-center bg-red-50 text-red-500 text-sm rounded"
@@ -166,6 +143,9 @@ defmodule PhxDemoWeb.DemoLive do
     <div class="min-w-0">
       <div class="flex items-center gap-2 mb-2">
         <h3 class="font-semibold text-lg">{@title}</h3>
+        <.link navigate={"/examples/#{@key}"} class="text-xs text-blue-600 hover:underline">
+          open
+        </.link>
       </div>
       <div
         class="flex items-center justify-center bg-gray-100 rounded animate-pulse"

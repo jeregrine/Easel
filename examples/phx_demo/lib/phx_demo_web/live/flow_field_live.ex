@@ -38,7 +38,7 @@ defmodule PhxDemoWeb.FlowFieldLive do
 
   def render(assigns) do
     ~H"""
-    <.demo title="Flow Field Particles — click to burst">
+    <.demo title="Flow Field Particles — click to burst" code_id="flow">
       <Easel.LiveView.canvas_stack id="flow" width={@background.width} height={@background.height}>
         <:layer id="bg" ops={@background.ops} />
         <:layer id="fg" ops={@canvas.ops} templates={@templates} on_click on_mouse_down />

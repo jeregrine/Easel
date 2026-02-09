@@ -62,7 +62,7 @@ defmodule PhxDemoWeb.LifeLive do
 
   def render(assigns) do
     ~H"""
-    <.demo title="Game of Life">
+    <.demo title="Game of Life" code_id="life">
       <div class="flex gap-2 mb-3">
         <button phx-click="toggle" class="px-3 py-1 border rounded text-sm">
           {if @life.running, do: "Pause", else: "Run"}

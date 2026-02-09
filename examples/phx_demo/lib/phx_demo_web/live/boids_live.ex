@@ -146,7 +146,7 @@ defmodule PhxDemoWeb.BoidsLive do
 
   def render(assigns) do
     ~H"""
-    <.demo title="Boids — click to add">
+    <.demo title="Boids — click to add" code_id="boids">
       <Easel.LiveView.canvas_stack id="boids" width={@width} height={@height}>
         <:layer id="bg" ops={@background.ops} />
         <:layer id="fg" ops={@canvas.ops} templates={@templates} on_click />

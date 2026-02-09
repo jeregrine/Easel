@@ -82,7 +82,13 @@ defmodule PhxDemo.Examples.FlowField do
         y = gy * 45 + 22
         a = angle(x, y, t)
 
-        %{x: x, y: y, rotate: a, stroke: "rgba(125, 211, 252, 0.25)", fill: "rgba(125, 211, 252, 0.25)"}
+        %{
+          x: x,
+          y: y,
+          rotate: a,
+          stroke: "rgba(125, 211, 252, 0.25)",
+          fill: "rgba(125, 211, 252, 0.25)"
+        }
       end
 
     Easel.new(@width, @height)

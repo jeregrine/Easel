@@ -15,7 +15,10 @@ defmodule PhxDemoWeb.PathfindingLive do
         fn state ->
           next = PhxDemo.Examples.Pathfinding.tick(state)
           {PhxDemo.Examples.Pathfinding.render(next), next}
-        end, interval: 33, canvas_assign: :canvas)
+        end,
+        interval: 33,
+        canvas_assign: :canvas
+      )
 
     {:ok, socket}
   end
@@ -43,7 +46,7 @@ defmodule PhxDemoWeb.PathfindingLive do
 
   def render(assigns) do
     ~H"""
-    <.demo title="Pathfinding — click to draw walls">
+    <.demo title="Pathfinding — click to draw walls" code_id="pathfinding">
       <div class="flex gap-2 mb-3">
         <button phx-click="start" class="px-3 py-1 border rounded text-sm">Start</button>
         <button phx-click="stop" class="px-3 py-1 border rounded text-sm">Stop</button>

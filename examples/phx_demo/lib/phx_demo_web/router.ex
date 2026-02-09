@@ -22,5 +22,6 @@ defmodule PhxDemoWeb.Router do
     live "/flow", FlowFieldLive
     live "/wave", WaveGridLive
     live "/pathfinding", PathfindingLive
+    live "/examples/:id", StaticExampleLive
   end
 end

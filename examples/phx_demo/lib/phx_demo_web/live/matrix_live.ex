@@ -40,7 +40,7 @@ defmodule PhxDemoWeb.MatrixLive do
 
   def render(assigns) do
     ~H"""
-    <.demo title="Matrix Rain">
+    <.demo title="Matrix Rain" code_id="matrix">
       <Easel.LiveView.canvas_stack id="matrix" width={@background.width} height={@background.height}>
         <:layer id="bg" ops={@background.ops} />
         <:layer id="fg" ops={@canvas.ops} />

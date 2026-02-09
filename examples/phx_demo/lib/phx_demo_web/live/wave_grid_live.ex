@@ -15,7 +15,10 @@ defmodule PhxDemoWeb.WaveGridLive do
         fn state ->
           next = PhxDemo.Examples.WaveGrid.tick(state)
           {PhxDemo.Examples.WaveGrid.render(next), next}
-        end, interval: 33, canvas_assign: :canvas)
+        end,
+        interval: 33,
+        canvas_assign: :canvas
+      )
 
     {:ok, socket}
   end
@@ -29,7 +32,7 @@ defmodule PhxDemoWeb.WaveGridLive do
 
   def render(assigns) do
     ~H"""
-    <.demo title="Wave Grid — click to disturb">
+    <.demo title="Wave Grid — click to disturb" code_id="wave">
       <Easel.LiveView.canvas_stack id="wave" width={@background.width} height={@background.height}>
         <:layer id="bg" ops={@background.ops} />
         <:layer id="fg" ops={@canvas.ops} templates={@canvas.templates} on_click />

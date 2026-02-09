@@ -28,6 +28,8 @@ defmodule PhxDemoWeb.CoreComponents do
   """
   use Phoenix.Component
 
+  import Phoenix.HTML, only: [raw: 1]
+
   alias Phoenix.LiveView.JS
 
   @doc """
@@ -492,21 +494,59 @@ defmodule PhxDemoWeb.CoreComponents do
     for {^field, {msg, opts}} <- errors, do: translate_error({msg, opts})
   end
 
+  @demo_sources PhxDemo.SourceCode.all()
+                |> Enum.into(%{}, fn {id, entry} ->
+                  files =
+                    Enum.map(entry.files, fn file ->
+                      Map.put(
+                        file,
+                        :html,
+                        Makeup.highlight(file.code, lexer: Makeup.Lexers.ElixirLexer)
+                      )
+                    end)
+
+                  {id, %{entry | files: files}}
+                end)
+
   @doc """
   Wraps a demo example with a title and back link.
   """
   attr :title, :string, required: true
+  attr :code_id, :string, default: nil
   slot :inner_block, required: true
 
   def demo(assigns) do
+    assigns =
+      assign_new(assigns, :source, fn ->
+        if assigns.code_id, do: demo_source(assigns.code_id), else: nil
+      end)
+
     ~H"""
     <div class="max-w-6xl mx-auto py-8 px-4">
-      <.link navigate="/" class="text-blue-600 hover:underline text-sm mb-4 inline-block">
-        ← Back to all demos
-      </.link>
+      <div class="flex items-center gap-4 mb-4">
+        <.link navigate="/" class="text-blue-600 hover:underline text-sm inline-block">
+          ← Back to all demos
+        </.link>
+      </div>
       <h1 class="text-2xl font-bold mb-4">{@title}</h1>
       {render_slot(@inner_block)}
+
+      <section :if={@source} class="mt-8">
+        <h2 class="text-lg font-semibold mb-3">Code</h2>
+        <div class="space-y-4">
+          <div :for={file <- @source.files} class="rounded-lg border overflow-hidden">
+            <div class="px-4 py-2 text-sm font-medium bg-gray-100 border-b">
+              {file.label} · {file.path}
+            </div>
+            <div class="p-4 overflow-x-auto text-sm">
+              {raw(file.html)}
+            </div>
+          </div>
+        </div>
+      </section>
     </div>
     """
   end
+
+  defp demo_source(code_id), do: Map.get(@demo_sources, code_id)
 end

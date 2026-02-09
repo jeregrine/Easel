@@ -29,7 +29,7 @@ defmodule PhxDemoWeb.LissajousLive do
 
   def render(assigns) do
     ~H"""
-    <.demo title="Lissajous Curves">
+    <.demo title="Lissajous Curves" code_id="lissajous">
       <Easel.LiveView.canvas_stack
         id="lissajous"
         width={@background.width}
