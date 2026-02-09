@@ -17,15 +17,21 @@ defmodule PhxDemo.Examples.Pathfinding do
       walls: MapSet.new(),
       start: start,
       goal: goal,
-      queue: :queue.in(start, :queue.new()),
-      visited: MapSet.new([start]),
+      mode: :bfs,
+      open: :queue.new(),
+      visited: MapSet.new(),
       came: %{},
-      frontier: MapSet.new([start]),
+      g: %{},
+      frontier: MapSet.new(),
       path: MapSet.new(),
       running: false,
       found: false
     }
+    |> reset_search()
   end
+
+  def set_mode(state, mode) when mode in [:bfs, :dfs, :astar, :greedy],
+    do: %{state | mode: mode} |> reset_search()
 
   def toggle_wall(state, x, y) do
     cell = {x, y}
@@ -37,7 +43,10 @@ defmodule PhxDemo.Examples.Pathfinding do
     end
   end
 
-  def clear_walls(state), do: %{state | walls: MapSet.new()} |> reset_search()
+  def clear_walls(state) do
+    mode = state[:mode] || :bfs
+    %{state | walls: MapSet.new(), mode: mode} |> reset_search()
+  end
 
   def random_walls(state) do
     walls =
@@ -50,7 +59,8 @@ defmodule PhxDemo.Examples.Pathfinding do
         {x, y}
       end
 
-    %{state | walls: walls} |> reset_search()
+    mode = state[:mode] || :bfs
+    %{state | walls: walls, mode: mode} |> reset_search()
   end
 
   def start_search(state), do: %{reset_search(state) | running: true}
@@ -58,7 +68,6 @@ defmodule PhxDemo.Examples.Pathfinding do
   def stop_search(state), do: %{state | running: false}
 
   def tick(%{running: false} = state), do: state
-
   def tick(%{found: true} = state), do: %{state | running: false}
 
   def tick(state) do
@@ -97,43 +106,160 @@ defmodule PhxDemo.Examples.Pathfinding do
   end
 
   defp step(state) do
-    case :queue.out(state.queue) do
-      {:empty, _} ->
+    case open_pop(state) do
+      :empty ->
         %{state | running: false}
 
-      {{:value, current}, queue} ->
-        if current == state.goal do
-          %{state | running: false, found: true, path: build_path(state.came, state.goal)}
-        else
-          {queue2, visited2, came2, frontier2} =
-            neighbors(current)
-            |> Enum.reject(fn n -> blocked?(state, n) or MapSet.member?(state.visited, n) end)
-            |> Enum.reduce(
-              {queue, state.visited, state.came, MapSet.delete(state.frontier, current)},
-              fn n, {q, v, c, f} ->
-                {:queue.in(n, q), MapSet.put(v, n), Map.put(c, n, current), MapSet.put(f, n)}
-              end
-            )
+      {current, open2} ->
+        frontier2 = MapSet.delete(state.frontier, current)
 
-          %{state | queue: queue2, visited: visited2, came: came2, frontier: frontier2}
+        cond do
+          MapSet.member?(state.visited, current) ->
+            %{state | open: open2, frontier: frontier2}
+
+          current == state.goal ->
+            %{
+              state
+              | open: open2,
+                frontier: frontier2,
+                running: false,
+                found: true,
+                path: build_path(state.came, state.goal)
+            }
+
+          true ->
+            visited2 = MapSet.put(state.visited, current)
+            current_g = Map.get(state.g, current, 0)
+
+            {open3, came3, g3, frontier3} =
+              neighbors(current)
+              |> Enum.reject(&blocked?(state, &1))
+              |> Enum.reduce({open2, state.came, state.g, frontier2}, fn n, {o, c, g, f} ->
+                maybe_enqueue(state, n, current, current_g, visited2, o, c, g, f)
+              end)
+
+            %{state | open: open3, visited: visited2, came: came3, g: g3, frontier: frontier3}
         end
+    end
+  end
+
+  defp maybe_enqueue(%{mode: mode}, n, current, current_g, visited, open, came, g, frontier)
+       when mode in [:bfs, :dfs] do
+    if MapSet.member?(visited, n) or MapSet.member?(frontier, n) do
+      {open, came, g, frontier}
+    else
+      open2 = open_put(mode, open, n, 0)
+      {open2, Map.put(came, n, current), Map.put(g, n, current_g + 1), MapSet.put(frontier, n)}
+    end
+  end
+
+  defp maybe_enqueue(
+         %{mode: :astar, goal: goal},
+         n,
+         current,
+         current_g,
+         visited,
+         open,
+         came,
+         g,
+         frontier
+       ) do
+    if MapSet.member?(visited, n) do
+      {open, came, g, frontier}
+    else
+      tentative = current_g + 1
+
+      if tentative < Map.get(g, n, 1_000_000) do
+        f_score = tentative + heuristic(n, goal)
+
+        {
+          open_put(:astar, open, n, f_score),
+          Map.put(came, n, current),
+          Map.put(g, n, tentative),
+          MapSet.put(frontier, n)
+        }
+      else
+        {open, came, g, frontier}
+      end
+    end
+  end
+
+  defp maybe_enqueue(
+         %{mode: :greedy, goal: goal},
+         n,
+         current,
+         current_g,
+         visited,
+         open,
+         came,
+         g,
+         frontier
+       ) do
+    if MapSet.member?(visited, n) or MapSet.member?(frontier, n) do
+      {open, came, g, frontier}
+    else
+      {
+        open_put(:greedy, open, n, heuristic(n, goal)),
+        Map.put(came, n, current),
+        Map.put(g, n, current_g + 1),
+        MapSet.put(frontier, n)
+      }
     end
   end
 
   defp reset_search(state) do
     start = state.start
+    mode = state[:mode] || :bfs
 
     %{
       state
-      | queue: :queue.in(start, :queue.new()),
-        visited: MapSet.new([start]),
+      | mode: mode,
+        open: open_put(mode, open_empty(mode), start, 0),
+        visited: MapSet.new(),
         came: %{},
+        g: %{start => 0},
         frontier: MapSet.new([start]),
         path: MapSet.new(),
         found: false,
         running: false
     }
   end
+
+  defp open_empty(:bfs), do: :queue.new()
+  defp open_empty(:dfs), do: []
+  defp open_empty(:astar), do: []
+  defp open_empty(:greedy), do: []
+
+  defp open_put(:bfs, open, node, _priority), do: :queue.in(node, open)
+  defp open_put(:dfs, open, node, _priority), do: [node | open]
+  defp open_put(:astar, open, node, priority), do: [{node, priority} | open]
+  defp open_put(:greedy, open, node, priority), do: [{node, priority} | open]
+
+  defp open_pop(%{mode: :bfs, open: open}) do
+    case :queue.out(open) do
+      {:empty, _} -> :empty
+      {{:value, node}, open2} -> {node, open2}
+    end
+  end
+
+  defp open_pop(%{mode: :dfs, open: []}), do: :empty
+  defp open_pop(%{mode: :dfs, open: [node | rest]}), do: {node, rest}
+
+  defp open_pop(%{mode: :astar, open: []}), do: :empty
+
+  defp open_pop(%{mode: :astar, open: open}) do
+    best = Enum.min_by(open, fn {_node, f} -> f end)
+    {elem(best, 0), List.delete(open, best)}
+  end
+
+  defp open_pop(%{mode: :greedy, open: []}), do: :empty
+
+  defp open_pop(%{mode: :greedy, open: open}) do
+    best = Enum.min_by(open, fn {_node, h} -> h end)
+    {elem(best, 0), List.delete(open, best)}
+  end
+
+  defp heuristic({x, y}, {gx, gy}), do: abs(x - gx) + abs(y - gy)
 
   defp build_path(came, goal) do
     Stream.unfold(goal, fn
