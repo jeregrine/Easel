@@ -108,7 +108,7 @@ defmodule PhxDemoWeb.DemoLive do
     """
   end
 
-  defp async_example(%{result: %{failed: reason}} = assigns) do
+  defp async_example(%{result: %{failed: reason}} = assigns) when not is_nil(reason) do
     assigns = assign(assigns, :reason, inspect(reason))
 
     ~H"""

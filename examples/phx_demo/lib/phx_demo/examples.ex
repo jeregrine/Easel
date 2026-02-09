@@ -218,10 +218,17 @@ defmodule PhxDemo.Examples do
     |> Easel.render()
   end
 
+  defp random_seed do
+    a = :erlang.unique_integer([:positive])
+    b = :erlang.phash2({System.system_time(), self()})
+    c = :erlang.phash2({System.monotonic_time(), make_ref()})
+    :rand.seed(:exsss, {a, b, c})
+  end
+
   # ── Tree ────────────────────────────────────────────────────────
 
   def tree do
-    :rand.seed(:exsss, {42, 42, 42})
+    random_seed()
     width = 600
     height = 500
 
@@ -282,7 +289,7 @@ defmodule PhxDemo.Examples do
   # ── Mondrian ────────────────────────────────────────────────────
 
   def mondrian do
-    :rand.seed(:exsss, {123, 456, 789})
+    random_seed()
     width = 500
     height = 500
 
@@ -383,6 +390,18 @@ defmodule PhxDemo.Examples do
   # ── Mandelbrot ──────────────────────────────────────────────────
 
   def mandelbrot do
+    case :persistent_term.get({__MODULE__, :mandelbrot}, :missing) do
+      :missing ->
+        canvas = mandelbrot_build()
+        :persistent_term.put({__MODULE__, :mandelbrot}, canvas)
+        canvas
+
+      canvas ->
+        canvas
+    end
+  end
+
+  defp mandelbrot_build do
     width = 200
     height = 200
     max_iter = 50
@@ -391,19 +410,34 @@ defmodule PhxDemo.Examples do
     y_min = -1.35
     y_max = 1.35
 
-    canvas = Easel.new(width, height)
+    palette = for n <- 0..max_iter, do: mandelbrot_color(n, max_iter)
 
-    Enum.reduce(0..(height - 1), canvas, fn py, acc ->
+    Enum.reduce(0..(height - 1), Easel.new(width, height), fn py, acc ->
       ci = y_min + py / height * (y_max - y_min)
 
-      Enum.reduce(0..(width - 1), acc, fn px, acc2 ->
-        cr = x_min + px / width * (x_max - x_min)
-        n = mandelbrot_iterate(0.0, 0.0, cr, ci, 0, max_iter)
-        color = mandelbrot_color(n, max_iter)
+      {runs, start_x, last_n} =
+        Enum.reduce(0..(width - 1), {[], 0, nil}, fn px, {runs, start_x, last_n} ->
+          cr = x_min + px / width * (x_max - x_min)
+          n = mandelbrot_iterate(0.0, 0.0, cr, ci, 0, max_iter)
 
-        acc2
-        |> Easel.set_fill_style(color)
-        |> Easel.fill_rect(px, py, 1, 1)
+          cond do
+            is_nil(last_n) ->
+              {runs, px, n}
+
+            n == last_n ->
+              {runs, start_x, last_n}
+
+            true ->
+              {[{start_x, px - start_x, last_n} | runs], px, n}
+          end
+        end)
+
+      runs = [{start_x, width - start_x, last_n} | runs] |> Enum.reverse()
+
+      Enum.reduce(runs, acc, fn {x, run_w, n}, c ->
+        c
+        |> Easel.set_fill_style(Enum.at(palette, n))
+        |> Easel.fill_rect(x, py, run_w, 1)
       end)
     end)
     |> Easel.render()
