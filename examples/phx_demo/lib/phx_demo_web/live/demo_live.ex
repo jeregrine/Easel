@@ -65,6 +65,13 @@ defmodule PhxDemoWeb.DemoLive do
             <h3 class="font-semibold">🟢 Matrix</h3>
             <p class="text-sm text-gray-500">Matrix rain animation</p>
           </.link>
+          <.link
+            navigate="/life"
+            class="block p-4 border rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <h3 class="font-semibold">🧬 Life</h3>
+            <p class="text-sm text-gray-500">Conway's Game of Life</p>
+          </.link>
         </div>
       </div>
 
