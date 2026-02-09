@@ -25,6 +25,7 @@ defmodule PhxDemoWeb.DemoLive do
 
   def mount(_params, _session, socket) do
     aurora_state = PhxDemo.Examples.Aurora.init()
+    aurora = PhxDemo.Examples.Aurora.render(aurora_state)
 
     socket =
       Enum.reduce(@examples, socket, fn {key, _title, _w, _h}, socket ->
@@ -37,14 +38,11 @@ defmodule PhxDemoWeb.DemoLive do
       socket
       |> assign(:examples, @examples)
       |> assign(:animated, @animated)
-      |> assign(:aurora, PhxDemo.Examples.Aurora.render(aurora_state))
+      |> assign(:aurora, %{width: aurora.width, height: aurora.height, ops: aurora.ops})
       |> assign(:aurora_state, aurora_state)
       |> assign(:aurora_running, true)
-      |> Easel.LiveView.animate(
-        "aurora",
-        :aurora_state,
-        &aurora_tick/1,
-        interval: 40,
+      |> Easel.LiveView.animate("aurora", :aurora_state, &aurora_tick/1,
+        interval: 70,
         canvas_assign: :aurora
       )
 
@@ -63,7 +61,7 @@ defmodule PhxDemoWeb.DemoLive do
       socket
       |> assign(:aurora_running, true)
       |> Easel.LiveView.animate("aurora", :aurora_state, &aurora_tick/1,
-        interval: 40,
+        interval: 70,
         canvas_assign: :aurora
       )
 
@@ -84,7 +82,7 @@ defmodule PhxDemoWeb.DemoLive do
           width={@aurora.width}
           height={@aurora.height}
           ops={@aurora.ops}
-          class="w-screen h-screen"
+          class="w-screen h-screen object-cover"
         />
       </div>
 

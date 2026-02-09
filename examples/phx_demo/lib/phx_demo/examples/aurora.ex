@@ -4,11 +4,11 @@ defmodule PhxDemo.Examples.Aurora do
 
   def init, do: %{t: 0.0}
 
-  def tick(%{t: t} = state), do: %{state | t: t + 1}
+  def tick(%{t: t} = state), do: %{state | t: t + 2}
 
   def render(%{t: t}) do
-    rows = 28
-    steps = 120
+    rows = 12
+    steps = 54
     dx = @width / steps
 
     canvas = Easel.new(@width, @height)
