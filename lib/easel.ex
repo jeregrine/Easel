@@ -225,40 +225,51 @@ defmodule Easel do
   """
   def instances(%Easel{} = ctx, name, instance_data)
       when is_atom(name) and is_list(instance_data) do
-    push_op(ctx, ["__instances", [Atom.to_string(name), instance_data]])
+    {rows, palette} = encode_instances(instance_data)
+    push_op(ctx, ["__instances", [Atom.to_string(name), rows, palette]])
   end
 
-  @doc """
-  Draws instances using a compact positional row format.
+  defp encode_instances(instance_data) do
+    {rows, _palette_map, palette_rev} =
+      Enum.reduce(instance_data, {[], %{}, []}, fn inst, {rows, pal, rev} ->
+        {fill_id, pal, rev} = palette_id(Map.get(inst, :fill), pal, rev)
+        {stroke_id, pal, rev} = palette_id(Map.get(inst, :stroke), pal, rev)
 
-  Row order is:
-  `[x, y, rotate, scale_x, scale_y, fill, stroke, alpha]`.
+        row =
+          [
+            Map.get(inst, :x),
+            Map.get(inst, :y),
+            Map.get(inst, :rotate),
+            Map.get(inst, :scale_x),
+            Map.get(inst, :scale_y),
+            fill_id,
+            stroke_id,
+            Map.get(inst, :alpha)
+          ]
+          |> Enum.reverse()
+          |> Enum.drop_while(&is_nil/1)
+          |> Enum.reverse()
 
-  Trailing `nil` values are trimmed to reduce payload size.
-  """
-  def instances_compact(%Easel{} = ctx, name, instance_data)
-      when is_atom(name) and is_list(instance_data) do
-    rows = Enum.map(instance_data, &instance_to_row/1)
-    push_op(ctx, ["__instances_compact", [Atom.to_string(name), rows]])
+        {[row | rows], pal, rev}
+      end)
+
+    {Enum.reverse(rows), Enum.reverse(palette_rev)}
   end
 
-  defp instance_to_row(inst) when is_map(inst) do
-    [
-      Map.get(inst, :x),
-      Map.get(inst, :y),
-      Map.get(inst, :rotate),
-      Map.get(inst, :scale_x),
-      Map.get(inst, :scale_y),
-      Map.get(inst, :fill),
-      Map.get(inst, :stroke),
-      Map.get(inst, :alpha)
-    ]
-    |> Enum.reverse()
-    |> Enum.drop_while(&is_nil/1)
-    |> Enum.reverse()
+  defp palette_id(nil, pal, rev), do: {nil, pal, rev}
+
+  defp palette_id(style, pal, rev) when is_binary(style) do
+    case pal do
+      %{^style => idx} ->
+        {idx, pal, rev}
+
+      _ ->
+        idx = map_size(pal)
+        {idx, Map.put(pal, style, idx), [style | rev]}
+    end
   end
 
-  defp instance_to_row(inst) when is_list(inst), do: inst
+  defp palette_id(_other, pal, rev), do: {nil, pal, rev}
 
   @doc """
   Expands `__instances` ops into plain Canvas 2D ops.
@@ -282,10 +293,7 @@ defmodule Easel do
   def expand(%Easel{} = ctx) do
     expanded =
       Enum.flat_map(ctx.ops, fn
-        ["__instances", [name, instances]] ->
-          expand_instances(name, instances, ctx.templates)
-
-        ["__instances_compact", [name, rows]] ->
+        ["__instances", [name, rows, palette]] ->
           instances =
             Enum.map(rows, fn row ->
               %{
@@ -294,12 +302,15 @@ defmodule Easel do
                 rotate: Enum.at(row, 2),
                 scale_x: Enum.at(row, 3),
                 scale_y: Enum.at(row, 4),
-                fill: Enum.at(row, 5),
-                stroke: Enum.at(row, 6),
+                fill: palette_lookup(palette, Enum.at(row, 5)),
+                stroke: palette_lookup(palette, Enum.at(row, 6)),
                 alpha: Enum.at(row, 7)
               }
             end)
 
+          expand_instances(name, instances, ctx.templates)
+
+        ["__instances", [name, instances]] ->
           expand_instances(name, instances, ctx.templates)
 
         op ->
@@ -308,6 +319,10 @@ defmodule Easel do
 
     %{ctx | ops: expanded}
   end
+
+  defp palette_lookup(_palette, nil), do: nil
+  defp palette_lookup(palette, idx) when is_integer(idx), do: Enum.at(palette || [], idx)
+  defp palette_lookup(_palette, _), do: nil
 
   defp expand_instances(name, instances, templates) do
     tpl_ops = Map.get(templates, String.to_existing_atom(name), [])

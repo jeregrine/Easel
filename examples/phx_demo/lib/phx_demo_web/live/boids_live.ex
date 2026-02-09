@@ -87,7 +87,7 @@ defmodule PhxDemoWeb.BoidsLive do
       |> Easel.close_path()
       |> Easel.fill()
     end)
-    |> Easel.instances_compact(:boid, instances)
+    |> Easel.instances(:boid, instances)
     |> Easel.render()
   end
 

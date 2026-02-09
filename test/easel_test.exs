@@ -160,9 +160,9 @@ defmodule EaselTest do
         |> Easel.instances(:dot, [%{x: 10, y: 20}, %{x: 30, y: 40}])
         |> Easel.render()
 
-      assert [["__instances", ["dot", instances]]] = canvas.ops
-      assert length(instances) == 2
-      assert hd(instances) == %{x: 10, y: 20}
+      assert [["__instances", ["dot", rows, _palette]]] = canvas.ops
+      assert length(rows) == 2
+      assert hd(rows) == [10, 20]
     end
 
     test "templates + ops are JSON-serializable" do
@@ -224,13 +224,9 @@ defmodule EaselTest do
         ])
         |> Easel.render()
 
-      [["__instances", ["t", [inst]]]] = canvas.ops
-      assert inst.x == 10
-      assert inst.y == 20
-      assert inst.rotate == 1.5
-      assert inst.scale_x == 2.0
-      assert inst.fill == "red"
-      assert inst.alpha == 0.5
+      [["__instances", ["t", [row], palette]]] = canvas.ops
+      assert row == [10, 20, 1.5, 2.0, 0.5, 0, 1, 0.5]
+      assert palette == ["red", "blue"]
     end
   end
 

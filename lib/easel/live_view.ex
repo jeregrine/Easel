@@ -222,9 +222,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
             for (const [op, args] of ops) {
               try {
                 if (op === "__instances") {
-                  this.drawInstances(args[0], args[1]);
-                } else if (op === "__instances_compact") {
-                  this.drawInstancesCompact(args[0], args[1]);
+                  this.drawInstances(args[0], args[1], args[2] || []);
                 } else if (op === "set") {
                   ctx[args[0]] = args[1];
                 } else if (typeof ctx[op] === "function") {
@@ -237,24 +235,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
               }
             }
           },
-          drawInstances(name, instances) {
-            const tpl = this.templates[name];
-            if (!tpl) { console.warn("[Easel] Unknown template:", name); return; }
-            const ctx = this.context;
-            for (const inst of instances) {
-              ctx.save();
-              ctx.translate(inst.x || 0, inst.y || 0);
-              if (inst.rotate) ctx.rotate(inst.rotate);
-              if (inst.scale_x != null || inst.scale_y != null)
-                ctx.scale(inst.scale_x ?? 1, inst.scale_y ?? 1);
-              if (inst.fill) ctx.fillStyle = inst.fill;
-              if (inst.stroke) ctx.strokeStyle = inst.stroke;
-              if (inst.alpha != null) ctx.globalAlpha = inst.alpha;
-              this.executeOps(tpl);
-              ctx.restore();
-            }
-          },
-          drawInstancesCompact(name, rows) {
+          drawInstances(name, rows, palette) {
             const tpl = this.templates[name];
             if (!tpl) { console.warn("[Easel] Unknown template:", name); return; }
             const ctx = this.context;
@@ -264,8 +245,8 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
               if (row[2] != null) ctx.rotate(row[2]);
               if (row[3] != null || row[4] != null)
                 ctx.scale(row[3] ?? 1, row[4] ?? 1);
-              if (row[5]) ctx.fillStyle = row[5];
-              if (row[6]) ctx.strokeStyle = row[6];
+              if (row[5] != null && palette[row[5]] != null) ctx.fillStyle = palette[row[5]];
+              if (row[6] != null && palette[row[6]] != null) ctx.strokeStyle = palette[row[6]];
               if (row[7] != null) ctx.globalAlpha = row[7];
               this.executeOps(tpl);
               ctx.restore();
