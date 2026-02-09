@@ -135,8 +135,34 @@ Event flags go on the layer that should receive them (typically the topmost):
 
 For scenes with many similar shapes (particles, sprites, entities), define a
 **template** once and stamp out **instances** with per-instance transforms.
-Only the instance data (position, rotation, color) is sent each frame — the
-template ops are cached client-side.
+Only the instance data is sent each frame while template ops are cached
+client-side.
+
+`Easel.instances/4` supports float quantization to reduce websocket payloads,
+and you can set defaults once on `Easel.template/4`:
+
+```elixir
+canvas =
+  Easel.new(800, 600)
+  |> Easel.template(:boid, fn c ->
+    c
+    |> Easel.begin_path()
+    |> Easel.move_to(12, 0)
+    |> Easel.line_to(-4, -5)
+    |> Easel.line_to(-4, 5)
+    |> Easel.close_path()
+    |> Easel.fill()
+  end, x: 1, y: 1, rotate: 3)
+```
+
+Per-call overrides still work:
+
+```elixir
+Easel.instances(canvas, :boid, instances, rotate: 2)
+```
+
+Internally, instance rows are sent in a compact columnar format (`rows + cols`)
+so unused fields are omitted instead of sending repeated `null`s.
 
 ```elixir
 canvas =
@@ -168,6 +194,15 @@ Pass templates to the canvas component alongside ops:
   ops={@canvas.ops}
   templates={@canvas.templates}
 />
+```
+
+If templates are cached in one canvas and instances are emitted from another,
+carry template instance defaults over with `Easel.with_template_opts/2`:
+
+```elixir
+frame_canvas
+|> Easel.with_template_opts(template_canvas.template_opts)
+|> Easel.instances(:boid, instances)
 ```
 
 Each instance map may contain:
@@ -234,6 +269,30 @@ To stop the animation:
 
 ```elixir
 Easel.LiveView.stop_animation(socket, "my-canvas")
+```
+
+## Examples
+
+This repo has two main example styles:
+
+- **Phoenix/LiveView examples** in `examples/phx_demo`
+  - Includes static and animated browser demos
+  - Static examples: Smiley, Chart, Starfield, Spiral, Fractal Tree, Mondrian, Sierpinski, Mandelbrot
+  - Animated examples: Clock, Boids, Matrix, Game of Life, Lissajous, Flow Field, Wave Grid, Pathfinding (BFS/DFS/A*/Greedy)
+  - Demo app entry: `examples/phx_demo/lib/phx_demo_web/live/demo_live.ex`
+  - Drawing logic modules: `examples/phx_demo/lib/phx_demo/examples/*.ex`
+  - Static per-example pages: `/examples/:id`
+
+- **wx/native examples** using `Easel.WX`
+  - Use the same Easel Canvas API, but render to a native wx window instead of the browser
+  - Includes both static renders and animated examples
+  - Standalone scripts live under `examples/*.exs` (for example boids and other sketches)
+
+Run the Phoenix demo locally:
+
+```bash
+cd examples/phx_demo
+mix phx.server
 ```
 
 ## wx Backend
@@ -330,7 +389,7 @@ Add `easel` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:easel, "~> 0.2.0"},
+    {:easel, "~> 0.2.2"},
     # optional, for LiveView support
     {:phoenix_live_view, "~> 1.0"}
   ]
