@@ -25,6 +25,9 @@ defmodule PhxDemoWeb.DemoLive do
 
   def mount(_params, _session, socket) do
     aurora_state = PhxDemo.Examples.Aurora.init()
+    fly_region = System.get_env("FLY_REGION")
+    fly_size = System.get_env("FLY_MACHINE_SIZE") || System.get_env("FLY_VM_SIZE")
+    fly_machine = System.get_env("FLY_MACHINE_ID")
     aurora = PhxDemo.Examples.Aurora.render(aurora_state)
 
     socket =
@@ -41,6 +44,9 @@ defmodule PhxDemoWeb.DemoLive do
       |> assign(:aurora, %{width: aurora.width, height: aurora.height, ops: aurora.ops})
       |> assign(:aurora_state, aurora_state)
       |> assign(:aurora_running, true)
+      |> assign(:fly_region, fly_region)
+      |> assign(:fly_size, fly_size)
+      |> assign(:fly_machine, fly_machine)
       |> Easel.LiveView.animate("aurora", :aurora_state, &aurora_tick/1,
         interval: 70,
         canvas_assign: :aurora
@@ -100,7 +106,11 @@ defmodule PhxDemoWeb.DemoLive do
             </svg>
           </a>
         </div>
-        <p class="text-gray-600 mb-4">Canvas 2D rendering powered by Easel + Phoenix LiveView</p>
+        <p class="text-gray-600">Canvas 2D rendering powered by Easel + Phoenix LiveView</p>
+        <p :if={@fly_region || @fly_size} class="text-xs text-gray-500 mb-4">
+          Fly deploy · region: {@fly_region || "n/a"} · machine: {@fly_size || "n/a"}
+          <span :if={@fly_machine}> · id:  {@fly_machine}</span>
+        </p>
 
         <div class="mb-8 rounded-lg border bg-gray-50 p-4 text-sm text-gray-700">
           <p>
