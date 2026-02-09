@@ -160,7 +160,7 @@ defmodule EaselTest do
         |> Easel.instances(:dot, [%{x: 10, y: 20}, %{x: 30, y: 40}])
         |> Easel.render()
 
-      assert [["__instances", ["dot", rows, _palette]]] = canvas.ops
+      assert [["__instances", ["dot", rows, _palette, _cols]]] = canvas.ops
       assert length(rows) == 2
       assert hd(rows) == [10, 20]
     end
@@ -224,9 +224,55 @@ defmodule EaselTest do
         ])
         |> Easel.render()
 
-      [["__instances", ["t", [row], palette]]] = canvas.ops
+      [["__instances", ["t", [row], palette, cols]]] = canvas.ops
+      assert cols == [0, 1, 2, 3, 4, 5, 6, 7]
       assert row == [10, 20, 1.5, 2.0, 0.5, 0, 1, 0.5]
       assert palette == ["red", "blue"]
+    end
+
+    test "instances can quantize float fields" do
+      canvas =
+        Easel.new(100, 100)
+        |> Easel.template(:t, fn c -> Easel.fill(c) end)
+        |> Easel.instances(:t, [%{x: 10.1234, y: 20.9876, rotate: 1.23456, alpha: 0.9876}],
+          x: 1,
+          y: 1,
+          rotate: 3,
+          alpha: 2
+        )
+        |> Easel.render()
+
+      [["__instances", ["t", [row], _palette, cols]]] = canvas.ops
+      assert cols == [0, 1, 2, 7]
+      assert row == [10.1, 21.0, 1.235, 0.99]
+    end
+
+    test "template quantization defaults apply to instances" do
+      canvas =
+        Easel.new(100, 100)
+        |> Easel.template(:t, fn c -> Easel.fill(c) end, x: 1, rotate: 2)
+        |> Easel.instances(:t, [%{x: 10.1234, y: 20.9876, rotate: 1.23456}])
+        |> Easel.render()
+
+      [["__instances", ["t", [row], _palette, cols]]] = canvas.ops
+      assert cols == [0, 1, 2]
+      assert row == [10.1, 20.9876, 1.23]
+    end
+
+    test "with_template_opts applies defaults across canvases" do
+      template_canvas =
+        Easel.new(100, 100)
+        |> Easel.template(:t, fn c -> Easel.fill(c) end, x: 1, y: 1, rotate: 3)
+
+      canvas =
+        Easel.new(100, 100)
+        |> Easel.with_template_opts(template_canvas.template_opts)
+        |> Easel.instances(:t, [%{x: 10.1234, y: 20.9876, rotate: 1.23456}])
+        |> Easel.render()
+
+      [["__instances", ["t", [row], _palette, cols]]] = canvas.ops
+      assert cols == [0, 1, 2]
+      assert row == [10.1, 21.0, 1.235]
     end
   end
 

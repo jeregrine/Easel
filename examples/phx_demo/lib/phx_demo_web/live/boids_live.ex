@@ -9,7 +9,26 @@ defmodule PhxDemoWeb.BoidsLive do
 
   def mount(_params, _session, socket) do
     boids = PhxDemo.Examples.boids_init()
-    canvas = render_boids(boids)
+
+    template_canvas =
+      Easel.new(@width, @height)
+      |> Easel.template(
+        :boid,
+        fn c ->
+          c
+          |> Easel.begin_path()
+          |> Easel.move_to(12, 0)
+          |> Easel.line_to(-4, -5)
+          |> Easel.line_to(-4, 5)
+          |> Easel.close_path()
+          |> Easel.fill()
+        end,
+        x: 1,
+        y: 1,
+        rotate: 3
+      )
+
+    canvas = render_boids(boids, template_canvas.template_opts)
 
     background =
       Easel.new(@width, @height)
@@ -17,18 +36,7 @@ defmodule PhxDemoWeb.BoidsLive do
       |> Easel.fill_rect(0, 0, @width, @height)
       |> Easel.render()
 
-    templates =
-      Easel.new(@width, @height)
-      |> Easel.template(:boid, fn c ->
-        c
-        |> Easel.begin_path()
-        |> Easel.move_to(12, 0)
-        |> Easel.line_to(-4, -5)
-        |> Easel.line_to(-4, 5)
-        |> Easel.close_path()
-        |> Easel.fill()
-      end)
-      |> then(& &1.templates)
+    templates = template_canvas.templates
 
     now = System.monotonic_time(:millisecond)
 
@@ -37,6 +45,7 @@ defmodule PhxDemoWeb.BoidsLive do
       |> assign(:boids, boids)
       |> assign(:canvas, canvas)
       |> assign(:templates, templates)
+      |> assign(:template_opts, template_canvas.template_opts)
       |> assign(:background, background)
       |> assign(:width, @width)
       |> assign(:height, @height)
@@ -64,7 +73,7 @@ defmodule PhxDemoWeb.BoidsLive do
 
     socket = Easel.LiveView.tick(socket, id)
     boids = socket.assigns.boids
-    canvas = render_boids(boids)
+    canvas = render_boids(boids, socket.assigns.template_opts)
 
     t1 = System.monotonic_time(:microsecond)
     tick_ms = (t1 - t0) / 1000.0
@@ -105,7 +114,7 @@ defmodule PhxDemoWeb.BoidsLive do
     end
   end
 
-  defp render_boids(boids) do
+  defp render_boids(boids, template_opts) do
     instances =
       Enum.map(boids, fn boid ->
         angle = :math.atan2(boid.vy, boid.vx)
@@ -115,6 +124,7 @@ defmodule PhxDemoWeb.BoidsLive do
       end)
 
     Easel.new(@width, @height)
+    |> Easel.with_template_opts(template_opts)
     |> Easel.instances(:boid, instances)
     |> Easel.render()
   end

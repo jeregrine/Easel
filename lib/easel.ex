@@ -48,12 +48,12 @@ defmodule Easel do
 
   ## Backends
 
-    * `Easel.LiveView` — Phoenix LiveView component with colocated JS hook
-    * `Easel.WX` — Native desktop window via Erlang's `:wx` (wxWidgets)
-    * Custom — consume `canvas.ops` directly in your own renderer
+    * `Easel.LiveView` - Phoenix LiveView component with colocated JS hook
+    * `Easel.WX` - Native desktop window via Erlang's `:wx` (wxWidgets)
+    * Custom - consume `canvas.ops` directly in your own renderer
   """
 
-  defstruct width: nil, height: nil, ops: [], rendered: false, templates: %{}
+  defstruct width: nil, height: nil, ops: [], rendered: false, templates: %{}, template_opts: %{}
 
   @doc "Creates a new canvas with no dimensions set."
   def new do
@@ -195,9 +195,25 @@ defmodule Easel do
           |> Easel.fill()
         end)
   """
-  def template(%Easel{} = ctx, name, draw_fn) when is_atom(name) and is_function(draw_fn, 1) do
+  def template(%Easel{} = ctx, name, draw_fn, opts \\ [])
+      when is_atom(name) and is_function(draw_fn, 1) do
     tpl = draw_fn.(%Easel{}) |> render()
-    %{ctx | templates: Map.put(ctx.templates, name, tpl.ops)}
+    t_opts = template_instance_opts(opts)
+
+    template_opts =
+      if t_opts == [], do: ctx.template_opts, else: Map.put(ctx.template_opts, name, t_opts)
+
+    %{ctx | templates: Map.put(ctx.templates, name, tpl.ops), template_opts: template_opts}
+  end
+
+  @doc """
+  Sets template-level instance options for this canvas.
+
+  Useful when templates are prepared in one canvas and instances are emitted
+  from another (for example, static templates cached in assigns).
+  """
+  def with_template_opts(%Easel{} = ctx, opts_map) when is_map(opts_map) do
+    %{ctx | template_opts: Map.merge(ctx.template_opts, opts_map)}
   end
 
   @doc """
@@ -205,15 +221,21 @@ defmodule Easel do
 
   Each instance is a map that may contain:
 
-    * `:x`, `:y` — translation (default `0`, `0`)
-    * `:rotate` — rotation in radians (default `0`)
-    * `:scale_x`, `:scale_y` — scale factors (default `1`, `1`)
-    * `:fill` — fill style override (applied before template ops)
-    * `:stroke` — stroke style override
-    * `:alpha` — global alpha override
+    * `:x`, `:y` - translation (default `0`, `0`)
+    * `:rotate` - rotation in radians (default `0`)
+    * `:scale_x`, `:scale_y` - scale factors (default `1`, `1`)
+    * `:fill` - fill style override (applied before template ops)
+    * `:stroke` - stroke style override
+    * `:alpha` - global alpha override
 
   The hook renders each instance via `save → translate → rotate → scale →
   [style overrides] → [template ops] → restore`.
+
+  You can optionally quantize float values before serialization by passing
+  `precision` globally or per field:
+
+      Easel.instances(canvas, :boid, instances, precision: 2)
+      Easel.instances(canvas, :boid, instances, x: 1, y: 1, rotate: 3)
 
   ## Example
 
@@ -223,37 +245,86 @@ defmodule Easel do
           fill: "hsl(\#{hue}, 70%, 60%)"}
       end))
   """
-  def instances(%Easel{} = ctx, name, instance_data)
+  def instances(%Easel{} = ctx, name, instance_data, opts \\ [])
       when is_atom(name) and is_list(instance_data) do
-    {rows, palette} = encode_instances(instance_data)
-    push_op(ctx, ["__instances", [Atom.to_string(name), rows, palette]])
+    merged_opts = merge_instance_opts(Map.get(ctx.template_opts, name, []), opts)
+    {rows, palette, cols} = encode_instances(instance_data, merged_opts)
+    push_op(ctx, ["__instances", [Atom.to_string(name), rows, palette, cols]])
   end
 
-  defp encode_instances(instance_data) do
-    {rows, _palette_map, palette_rev} =
+  defp encode_instances(instance_data, opts) do
+    {rows_full, _palette_map, palette_rev} =
       Enum.reduce(instance_data, {[], %{}, []}, fn inst, {rows, pal, rev} ->
         {fill_id, pal, rev} = palette_id(Map.get(inst, :fill), pal, rev)
         {stroke_id, pal, rev} = palette_id(Map.get(inst, :stroke), pal, rev)
 
-        row =
-          [
-            Map.get(inst, :x),
-            Map.get(inst, :y),
-            Map.get(inst, :rotate),
-            Map.get(inst, :scale_x),
-            Map.get(inst, :scale_y),
-            fill_id,
-            stroke_id,
-            Map.get(inst, :alpha)
-          ]
-          |> Enum.reverse()
-          |> Enum.drop_while(&is_nil/1)
-          |> Enum.reverse()
+        row = [
+          quantize(Map.get(inst, :x), :x, opts),
+          quantize(Map.get(inst, :y), :y, opts),
+          quantize(Map.get(inst, :rotate), :rotate, opts),
+          quantize(Map.get(inst, :scale_x), :scale_x, opts),
+          quantize(Map.get(inst, :scale_y), :scale_y, opts),
+          fill_id,
+          stroke_id,
+          quantize(Map.get(inst, :alpha), :alpha, opts)
+        ]
 
         {[row | rows], pal, rev}
       end)
 
-    {Enum.reverse(rows), Enum.reverse(palette_rev)}
+    rows_full = Enum.reverse(rows_full)
+    cols = active_cols(rows_full)
+
+    rows =
+      Enum.map(rows_full, fn row ->
+        Enum.map(cols, &Enum.at(row, &1))
+      end)
+
+    {rows, Enum.reverse(palette_rev), cols}
+  end
+
+  defp quantize(v, _key, _opts) when is_nil(v) or is_integer(v), do: v
+
+  defp quantize(v, key, opts) when is_float(v) do
+    case quantize_places(opts, key) do
+      nil -> v
+      places when is_integer(places) and places >= 0 -> Float.round(v, places)
+      _ -> v
+    end
+  end
+
+  defp quantize(v, _key, _opts), do: v
+
+  defp quantize_places(opts, key) do
+    cond do
+      is_list(opts) -> Keyword.get(opts, key) || Keyword.get(opts, :precision)
+      is_map(opts) -> Map.get(opts, key) || Map.get(opts, :precision)
+      true -> nil
+    end
+  end
+
+  defp template_instance_opts(opts) when is_list(opts) do
+    opts |> Keyword.take([:precision, :x, :y, :rotate, :scale_x, :scale_y, :alpha])
+  end
+
+  defp template_instance_opts(_), do: []
+
+  defp merge_instance_opts(base, override) when is_list(base) and is_list(override),
+    do: Keyword.merge(base, override)
+
+  defp merge_instance_opts(_base, override) when is_list(override), do: override
+  defp merge_instance_opts(base, _override) when is_list(base), do: base
+  defp merge_instance_opts(_base, _override), do: []
+
+  defp active_cols(rows) do
+    # Always include x/y; include other columns only if any non-nil appears.
+    base = [0, 1]
+
+    dynamic =
+      2..7
+      |> Enum.filter(fn idx -> Enum.any?(rows, &(Enum.at(&1, idx) != nil)) end)
+
+    base ++ dynamic
   end
 
   defp palette_id(nil, pal, rev), do: {nil, pal, rev}
@@ -293,21 +364,12 @@ defmodule Easel do
   def expand(%Easel{} = ctx) do
     expanded =
       Enum.flat_map(ctx.ops, fn
-        ["__instances", [name, rows, palette]] ->
-          instances =
-            Enum.map(rows, fn row ->
-              %{
-                x: Enum.at(row, 0),
-                y: Enum.at(row, 1),
-                rotate: Enum.at(row, 2),
-                scale_x: Enum.at(row, 3),
-                scale_y: Enum.at(row, 4),
-                fill: palette_lookup(palette, Enum.at(row, 5)),
-                stroke: palette_lookup(palette, Enum.at(row, 6)),
-                alpha: Enum.at(row, 7)
-              }
-            end)
+        ["__instances", [name, rows, palette, cols]] ->
+          instances = Enum.map(rows, &row_to_instance(&1, palette, cols || []))
+          expand_instances(name, instances, ctx.templates)
 
+        ["__instances", [name, rows, palette]] ->
+          instances = Enum.map(rows, &row_to_instance(&1, palette, [0, 1, 2, 3, 4, 5, 6, 7]))
           expand_instances(name, instances, ctx.templates)
 
         ["__instances", [name, instances]] ->
@@ -318,6 +380,28 @@ defmodule Easel do
       end)
 
     %{ctx | ops: expanded}
+  end
+
+  defp row_to_instance(row, palette, cols) do
+    col_pos = cols |> Enum.with_index() |> Map.new()
+
+    get = fn col_idx ->
+      case Map.get(col_pos, col_idx) do
+        nil -> nil
+        pos -> Enum.at(row, pos)
+      end
+    end
+
+    %{
+      x: get.(0),
+      y: get.(1),
+      rotate: get.(2),
+      scale_x: get.(3),
+      scale_y: get.(4),
+      fill: palette_lookup(palette, get.(5)),
+      stroke: palette_lookup(palette, get.(6)),
+      alpha: get.(7)
+    }
   end
 
   defp palette_lookup(_palette, nil), do: nil
@@ -360,7 +444,7 @@ defmodule Easel do
   Finalizes the canvas by reversing the ops list into execution order.
 
   Must be called before passing the canvas to a backend for rendering.
-  Safe to call multiple times — subsequent calls are no-ops.
+  Safe to call multiple times - subsequent calls are no-ops.
   """
   def render(%Easel{rendered: true} = ctx), do: ctx
 

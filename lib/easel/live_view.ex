@@ -222,7 +222,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
             for (const [op, args] of ops) {
               try {
                 if (op === "__instances") {
-                  this.drawInstances(args[0], args[1], args[2] || []);
+                  this.drawInstances(args[0], args[1], args[2] || [], args[3] || null);
                 } else if (op === "set") {
                   ctx[args[0]] = args[1];
                 } else if (typeof ctx[op] === "function") {
@@ -235,19 +235,53 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
               }
             }
           },
-          drawInstances(name, rows, palette) {
+          drawInstances(name, rows, palette, cols) {
             const tpl = this.templates[name];
             if (!tpl) { console.warn("[Easel] Unknown template:", name); return; }
             const ctx = this.context;
+
+            const layout = Array.isArray(cols) && cols.length > 0 ? cols : [0, 1, 2, 3, 4, 5, 6, 7];
+            const pos = {};
+            layout.forEach((col, i) => { pos[col] = i; });
+            const get = (row, col) => {
+              const i = pos[col];
+              return i == null ? null : row[i];
+            };
+
             for (const row of rows) {
+              // Backward compatibility: older list-of-maps payload
+              if (!Array.isArray(row)) {
+                const inst = row || {};
+                ctx.save();
+                ctx.translate(inst.x || 0, inst.y || 0);
+                if (inst.rotate) ctx.rotate(inst.rotate);
+                if (inst.scale_x != null || inst.scale_y != null)
+                  ctx.scale(inst.scale_x ?? 1, inst.scale_y ?? 1);
+                if (inst.fill) ctx.fillStyle = inst.fill;
+                if (inst.stroke) ctx.strokeStyle = inst.stroke;
+                if (inst.alpha != null) ctx.globalAlpha = inst.alpha;
+                this.executeOps(tpl);
+                ctx.restore();
+                continue;
+              }
+
               ctx.save();
-              ctx.translate(row[0] ?? 0, row[1] ?? 0);
-              if (row[2] != null) ctx.rotate(row[2]);
-              if (row[3] != null || row[4] != null)
-                ctx.scale(row[3] ?? 1, row[4] ?? 1);
-              if (row[5] != null && palette[row[5]] != null) ctx.fillStyle = palette[row[5]];
-              if (row[6] != null && palette[row[6]] != null) ctx.strokeStyle = palette[row[6]];
-              if (row[7] != null) ctx.globalAlpha = row[7];
+              const x = get(row, 0);
+              const y = get(row, 1);
+              const rotate = get(row, 2);
+              const scaleX = get(row, 3);
+              const scaleY = get(row, 4);
+              const fillId = get(row, 5);
+              const strokeId = get(row, 6);
+              const alpha = get(row, 7);
+
+              ctx.translate(x ?? 0, y ?? 0);
+              if (rotate != null) ctx.rotate(rotate);
+              if (scaleX != null || scaleY != null)
+                ctx.scale(scaleX ?? 1, scaleY ?? 1);
+              if (fillId != null && palette[fillId] != null) ctx.fillStyle = palette[fillId];
+              if (strokeId != null && palette[strokeId] != null) ctx.strokeStyle = palette[strokeId];
+              if (alpha != null) ctx.globalAlpha = alpha;
               this.executeOps(tpl);
               ctx.restore();
             }

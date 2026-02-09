@@ -2,7 +2,7 @@ function executeOps(context, templates, ops) {
   for (const [op, args] of ops) {
     try {
       if (op === "__instances") {
-        drawInstances(context, templates, args[0], args[1]);
+        drawInstances(context, templates, args[0], args[1], args[2] || [], args[3] || null);
       } else if (op === "set") {
         context[args[0]] = args[1];
       } else if (typeof context[op] === "function") {
@@ -16,18 +16,52 @@ function executeOps(context, templates, ops) {
   }
 }
 
-function drawInstances(context, templates, name, instances) {
+function drawInstances(context, templates, name, rows, palette = [], cols = null) {
   const tpl = templates[name];
   if (!tpl) { console.warn("[Easel] Unknown template:", name); return; }
-  for (const inst of instances) {
+
+  const layout = Array.isArray(cols) && cols.length > 0 ? cols : [0, 1, 2, 3, 4, 5, 6, 7];
+  const pos = {};
+  layout.forEach((col, i) => { pos[col] = i; });
+  const get = (row, col) => {
+    const i = pos[col];
+    return i == null ? null : row[i];
+  };
+
+  for (const row of rows) {
+    // Backward compatibility: older list-of-maps payload
+    if (!Array.isArray(row)) {
+      const inst = row || {};
+      context.save();
+      context.translate(inst.x || 0, inst.y || 0);
+      if (inst.rotate) context.rotate(inst.rotate);
+      if (inst.scale_x != null || inst.scale_y != null)
+        context.scale(inst.scale_x ?? 1, inst.scale_y ?? 1);
+      if (inst.fill) context.fillStyle = inst.fill;
+      if (inst.stroke) context.strokeStyle = inst.stroke;
+      if (inst.alpha != null) context.globalAlpha = inst.alpha;
+      executeOps(context, templates, tpl);
+      context.restore();
+      continue;
+    }
+
     context.save();
-    context.translate(inst.x || 0, inst.y || 0);
-    if (inst.rotate) context.rotate(inst.rotate);
-    if (inst.scale_x != null || inst.scale_y != null)
-      context.scale(inst.scale_x ?? 1, inst.scale_y ?? 1);
-    if (inst.fill) context.fillStyle = inst.fill;
-    if (inst.stroke) context.strokeStyle = inst.stroke;
-    if (inst.alpha != null) context.globalAlpha = inst.alpha;
+    const x = get(row, 0);
+    const y = get(row, 1);
+    const rotate = get(row, 2);
+    const scaleX = get(row, 3);
+    const scaleY = get(row, 4);
+    const fillId = get(row, 5);
+    const strokeId = get(row, 6);
+    const alpha = get(row, 7);
+
+    context.translate(x ?? 0, y ?? 0);
+    if (rotate != null) context.rotate(rotate);
+    if (scaleX != null || scaleY != null)
+      context.scale(scaleX ?? 1, scaleY ?? 1);
+    if (fillId != null && palette[fillId] != null) context.fillStyle = palette[fillId];
+    if (strokeId != null && palette[strokeId] != null) context.strokeStyle = palette[strokeId];
+    if (alpha != null) context.globalAlpha = alpha;
     executeOps(context, templates, tpl);
     context.restore();
   }

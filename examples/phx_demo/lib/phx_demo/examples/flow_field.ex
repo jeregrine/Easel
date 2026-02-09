@@ -92,30 +92,45 @@ defmodule PhxDemo.Examples.FlowField do
       end
 
     Easel.new(@width, @height)
-    |> Easel.template(:boid, fn c ->
-      c
-      |> Easel.begin_path()
-      |> Easel.move_to(3.2, 0)
-      |> Easel.line_to(-2.0, -1.25)
-      |> Easel.line_to(-1.2, 0)
-      |> Easel.line_to(-2.0, 1.25)
-      |> Easel.close_path()
-      |> Easel.fill()
-    end)
-    |> Easel.template(:vec, fn c ->
-      c
-      |> Easel.begin_path()
-      |> Easel.move_to(-6, 0)
-      |> Easel.line_to(4, 0)
-      |> Easel.set_line_width(1)
-      |> Easel.stroke()
-      |> Easel.begin_path()
-      |> Easel.move_to(4, 0)
-      |> Easel.line_to(0, -2)
-      |> Easel.line_to(0, 2)
-      |> Easel.close_path()
-      |> Easel.fill()
-    end)
+    |> Easel.template(
+      :boid,
+      fn c ->
+        c
+        |> Easel.begin_path()
+        |> Easel.move_to(3.2, 0)
+        |> Easel.line_to(-2.0, -1.25)
+        |> Easel.line_to(-1.2, 0)
+        |> Easel.line_to(-2.0, 1.25)
+        |> Easel.close_path()
+        |> Easel.fill()
+      end,
+      x: 1,
+      y: 1,
+      rotate: 3,
+      scale_x: 2,
+      scale_y: 2,
+      alpha: 2
+    )
+    |> Easel.template(
+      :vec,
+      fn c ->
+        c
+        |> Easel.begin_path()
+        |> Easel.move_to(-6, 0)
+        |> Easel.line_to(4, 0)
+        |> Easel.set_line_width(1)
+        |> Easel.stroke()
+        |> Easel.begin_path()
+        |> Easel.move_to(4, 0)
+        |> Easel.line_to(0, -2)
+        |> Easel.line_to(0, 2)
+        |> Easel.close_path()
+        |> Easel.fill()
+      end,
+      x: 0,
+      y: 0,
+      rotate: 3
+    )
     |> Easel.instances(:vec, vector_instances)
     |> Easel.instances(:boid, boid_instances)
     |> Easel.render()
