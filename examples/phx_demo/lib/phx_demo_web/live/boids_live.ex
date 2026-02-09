@@ -3,14 +3,14 @@ defmodule PhxDemoWeb.BoidsLive do
 
   @width PhxDemo.Examples.boids_width()
   @height PhxDemo.Examples.boids_height()
-  @max_boids 500
+  @max_boids 1000
+  @frame_ms 16
   @bucket_colors 0..35 |> Enum.map(&"hsl(#{&1 * 10}, 70%, 60%)") |> List.to_tuple()
 
   def mount(_params, _session, socket) do
     boids = PhxDemo.Examples.boids_init()
     canvas = render_boids(boids)
 
-    # Static background — sent once, never changes
     background =
       Easel.new(@width, @height)
       |> Easel.set_fill_style("#0a0a2e")
@@ -41,6 +41,7 @@ defmodule PhxDemoWeb.BoidsLive do
       |> assign(:width, @width)
       |> assign(:height, @height)
       |> assign(:max_boids, @max_boids)
+      |> assign(:boid_count, length(boids))
       |> assign(:fps, 0)
       |> assign(:avg_tick_ms, 0.0)
       |> assign(:fps_frames, 0)
@@ -50,12 +51,9 @@ defmodule PhxDemoWeb.BoidsLive do
         "fg",
         :boids,
         fn boids ->
-          new_boids = PhxDemo.Examples.boids_tick(boids)
-          canvas = render_boids(new_boids)
-          {canvas, new_boids}
+          {Easel.new(), PhxDemo.Examples.boids_tick(boids)}
         end,
-        interval: 16,
-        canvas_assign: :canvas
+        interval: @frame_ms
       )
 
     {:ok, socket}
@@ -63,11 +61,20 @@ defmodule PhxDemoWeb.BoidsLive do
 
   def handle_info({:easel_tick, id}, socket) do
     t0 = System.monotonic_time(:microsecond)
+
     socket = Easel.LiveView.tick(socket, id)
+    boids = socket.assigns.boids
+    canvas = render_boids(boids)
+
     t1 = System.monotonic_time(:microsecond)
     tick_ms = (t1 - t0) / 1000.0
 
-    {:noreply, update_fps_stats(socket, tick_ms)}
+    socket =
+      socket
+      |> Easel.LiveView.draw("fg", canvas, clear: true)
+      |> update_fps_stats(tick_ms, length(boids))
+
+    {:noreply, socket}
   end
 
   def handle_event("fg:click", %{"x" => x, "y" => y}, socket) do
@@ -89,11 +96,15 @@ defmodule PhxDemoWeb.BoidsLive do
           }
         end
 
-      {:noreply, assign(socket, :boids, Enum.take(new_boids ++ current, @max_boids))}
+      boids = Enum.take(new_boids ++ current, @max_boids)
+
+      {:noreply,
+       socket
+       |> assign(:boids, boids)
+       |> assign(:boid_count, length(boids))}
     end
   end
 
-  # Render boids using instances against a static cached template.
   defp render_boids(boids) do
     instances =
       Enum.map(boids, fn boid ->
@@ -108,7 +119,7 @@ defmodule PhxDemoWeb.BoidsLive do
     |> Easel.render()
   end
 
-  defp update_fps_stats(socket, tick_ms) do
+  defp update_fps_stats(socket, tick_ms, boid_count) do
     now = System.monotonic_time(:millisecond)
     frames = socket.assigns.fps_frames + 1
     tick_acc_ms = socket.assigns.fps_tick_acc_ms + tick_ms
@@ -122,6 +133,7 @@ defmodule PhxDemoWeb.BoidsLive do
       socket
       |> assign(:fps, fps)
       |> assign(:avg_tick_ms, avg_tick_ms)
+      |> assign(:boid_count, boid_count)
       |> assign(:fps_frames, 0)
       |> assign(:fps_tick_acc_ms, 0.0)
       |> assign(:fps_window_start, now)
@@ -140,7 +152,7 @@ defmodule PhxDemoWeb.BoidsLive do
         <:layer id="fg" ops={@canvas.ops} templates={@templates} on_click />
       </Easel.LiveView.canvas_stack>
       <p class="text-sm text-gray-500 mt-2">
-        {length(@boids)} / {@max_boids} boids · {@fps} FPS · {Float.round(@avg_tick_ms, 2)}ms tick
+        {@boid_count} / {@max_boids} boids · {@fps} FPS · {Float.round(@avg_tick_ms, 2)}ms tick
       </p>
     </.demo>
     """
