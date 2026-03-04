@@ -444,7 +444,7 @@ Add `easel` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:easel, "~> 0.3.1"},
+    {:easel, "~> 0.3.2"},
     # optional, for LiveView support
     {:phoenix_live_view, "~> 1.0"},
     # optional, for Easel.Terminal
