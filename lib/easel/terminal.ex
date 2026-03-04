@@ -19,17 +19,13 @@ defmodule Easel.Terminal do
   @default_dark_min_luma 0.28
   @default_light_max_luma 0.72
 
-  @termite_terminal Module.concat([Termite, Terminal])
-  @termite_screen Module.concat([Termite, Screen])
-
-  @termite_available match?({:module, _}, Code.ensure_compiled(@termite_terminal)) and
-                       match?({:module, _}, Code.ensure_compiled(@termite_screen))
+  @termite_available Code.ensure_loaded?(Termite)
 
   @doc """
   Returns `true` when both wx rasterization and Termite terminal I/O are available.
   """
   def available? do
-    @termite_available and Easel.WX.available?() and tty_available?()
+    Code.ensure_loaded?(Termite) and Easel.WX.available?() and tty_available?()
   end
 
   @doc """
@@ -368,7 +364,7 @@ defmodule Easel.Terminal do
 
       if adapter_mod == shell_mod and is_map(adapter_state) do
         case Map.get(adapter_state, :pid) do
-          pid when is_pid(pid) -> Process.exit(pid, :normal)
+          pid when is_pid(pid) -> Process.exit(pid, :shutdown)
           _ -> :ok
         end
       else
@@ -440,44 +436,46 @@ defmodule Easel.Terminal do
     defp quit_key?(_), do: false
 
     defp t_start do
-      apply(@termite_terminal, :start, [])
+      Termite.Terminal.start()
     rescue
       MatchError ->
         raise "Easel.Terminal requires an interactive TTY. Run it from a real terminal session."
     end
 
-    defp t_resize(term), do: apply(@termite_terminal, :resize, [term])
+    defp t_resize(term), do: Termite.Terminal.resize(term)
 
     defp t_poll_event(term, timeout) do
-      if function_exported?(@termite_terminal, :poll_event, 2) do
-        apply(@termite_terminal, :poll_event, [term, timeout])
-      else
-        @termite_terminal
-        |> apply(:poll, [term, timeout])
-        |> normalize_poll_message()
-      end
+      Termite.Terminal.poll(term, timeout)
+      |> normalize_poll_message()
     end
 
     defp normalize_poll_message({:data, _} = message) do
-      input_mod = Module.concat([Termite, Input])
-
-      if function_exported?(input_mod, :parse, 1) do
-        apply(input_mod, :parse, [message])
-      else
-        message
-      end
+      Termite.Input.parse(message)
     end
 
     defp normalize_poll_message(message), do: message
 
-    defp t_write(term, value), do: apply(@termite_screen, :write, [term, value])
-    defp t_clear_screen(term), do: apply(@termite_screen, :clear_screen, [term])
-    defp t_alt_screen(term), do: apply(@termite_screen, :alt_screen, [term])
-    defp t_hide_cursor(term), do: apply(@termite_screen, :hide_cursor, [term])
-    defp t_title(term, title), do: apply(@termite_screen, :title, [term, title])
+    defp t_write(term, value), do: Termite.Screen.write(term, value)
+    defp t_clear_screen(term), do: Termite.Screen.clear_screen(term)
+    defp t_alt_screen(term), do: Termite.Screen.alt_screen(term)
+    defp t_hide_cursor(term), do: Termite.Screen.hide_cursor(term)
+    defp t_title(term, title), do: Termite.Screen.title(term, title)
+    defp t_cursor_position(term, x, y), do: Termite.Screen.cursor_position(term, x, y)
 
-    defp t_cursor_position(term, x, y),
-      do: apply(@termite_screen, :cursor_position, [term, x, y])
+    defp teardown_char_mask_cache do
+      key = {__MODULE__, :char_mask_cache_table}
+
+      case Process.get(key) do
+        tid when is_reference(tid) ->
+          :ets.delete(tid)
+          Process.delete(key)
+
+        _ ->
+          :ok
+      end
+    rescue
+      _ -> :ok
+    end
   else
     @doc """
     Renders a canvas in the terminal.
@@ -495,22 +493,6 @@ defmodule Easel.Terminal do
     """
     def animate(_width, _height, _state, _fun, _opts \\ []) do
       raise "Easel.Terminal requires the :termite dependency. Add {:termite, \"~> 0.4.0\"} and recompile."
-    end
-  end
-
-  defp ensure_wx_available! do
-    if Easel.WX.available?() do
-      :ok
-    else
-      raise "Easel.Terminal currently requires wx support for off-screen rasterization."
-    end
-  end
-
-  defp ensure_tty_available! do
-    if tty_available?() do
-      :ok
-    else
-      raise "Easel.Terminal requires an interactive TTY. Run it from a real terminal session."
     end
   end
 
@@ -594,25 +576,23 @@ defmodule Easel.Terminal do
     {draw_cols, draw_rows, off_x, off_y} =
       fit_bounds(width, height, columns, rows, cell_aspect, fit)
 
-    lines =
-      for row <- 0..(rows - 1) do
-        render_line(
-          row,
-          columns,
-          width,
-          height,
-          rgb,
-          chars,
-          invert?,
-          color_mode,
-          draw_cols,
-          draw_rows,
-          off_x,
-          off_y,
-          samples,
-          contrast_profile
-        )
-      end
+    render_opts = %{
+      columns: columns,
+      src_w: width,
+      src_h: height,
+      rgb: rgb,
+      chars: chars,
+      invert?: invert?,
+      color_mode: color_mode,
+      draw_cols: draw_cols,
+      draw_rows: draw_rows,
+      off_x: off_x,
+      off_y: off_y,
+      samples: samples,
+      contrast_profile: contrast_profile
+    }
+
+    lines = for row <- 0..(rows - 1), do: render_line(row, render_opts)
 
     lines
     |> Enum.intersperse("\n")
@@ -641,27 +621,25 @@ defmodule Easel.Terminal do
 
     sample_maps = silhouette_sample_maps(width, height, draw_cols, draw_rows, glyph_w, glyph_h)
 
-    lines =
-      for row <- 0..(rows - 1) do
-        render_silhouette_line(
-          row,
-          columns,
-          width,
-          rgb,
-          color_mode,
-          draw_cols,
-          draw_rows,
-          off_x,
-          off_y,
-          glyph_w,
-          glyph_h,
-          bg_threshold,
-          glyph_profile,
-          mask_cache,
-          contrast_profile,
-          sample_maps
-        )
-      end
+    render_opts = %{
+      columns: columns,
+      src_w: width,
+      rgb: rgb,
+      color_mode: color_mode,
+      draw_cols: draw_cols,
+      draw_rows: draw_rows,
+      off_x: off_x,
+      off_y: off_y,
+      glyph_w: glyph_w,
+      glyph_h: glyph_h,
+      bg_threshold: bg_threshold,
+      glyph_profile: glyph_profile,
+      mask_cache: mask_cache,
+      contrast_profile: contrast_profile,
+      sample_maps: sample_maps
+    }
+
+    lines = for row <- 0..(rows - 1), do: render_silhouette_line(row, render_opts)
 
     lines
     |> Enum.intersperse("\n")
@@ -689,21 +667,6 @@ defmodule Easel.Terminal do
         Process.put(key, tid)
         tid
     end
-  end
-
-  defp teardown_char_mask_cache do
-    key = {__MODULE__, :char_mask_cache_table}
-
-    case Process.get(key) do
-      tid when is_reference(tid) ->
-        :ets.delete(tid)
-        Process.delete(key)
-
-      _ ->
-        :ok
-    end
-  rescue
-    _ -> :ok
   end
 
   defp silhouette_sample_maps(src_w, src_h, draw_cols, draw_rows, glyph_w, glyph_h) do
@@ -760,22 +723,23 @@ defmodule Easel.Terminal do
     {draw_cols, draw_rows, off_x, off_y}
   end
 
-  defp render_line(
-         row,
-         columns,
-         src_w,
-         src_h,
-         rgb,
-         chars,
-         invert?,
-         color_mode,
-         draw_cols,
-         draw_rows,
-         off_x,
-         off_y,
-         samples,
-         contrast_profile
-       ) do
+  defp render_line(row, opts) do
+    %{
+      columns: columns,
+      src_w: src_w,
+      src_h: src_h,
+      rgb: rgb,
+      chars: chars,
+      invert?: invert?,
+      color_mode: color_mode,
+      draw_cols: draw_cols,
+      draw_rows: draw_rows,
+      off_x: off_x,
+      off_y: off_y,
+      samples: samples,
+      contrast_profile: contrast_profile
+    } = opts
+
     char_count = tuple_size(chars)
 
     {line, current_color} =
@@ -807,7 +771,7 @@ defmodule Easel.Terminal do
 
           render_cell(ch, r, g, b, color_mode, current_color)
         else
-          {" ", current_color}
+          render_cell_with_ansi(" ", nil, current_color, color_mode)
         end
       end)
 
@@ -820,24 +784,25 @@ defmodule Easel.Terminal do
     end
   end
 
-  defp render_silhouette_line(
-         row,
-         columns,
-         src_w,
-         rgb,
-         color_mode,
-         draw_cols,
-         draw_rows,
-         off_x,
-         off_y,
-         glyph_w,
-         glyph_h,
-         bg_threshold,
-         glyph_profile,
-         mask_cache,
-         contrast_profile,
-         sample_maps
-       ) do
+  defp render_silhouette_line(row, opts) do
+    %{
+      columns: columns,
+      src_w: src_w,
+      rgb: rgb,
+      color_mode: color_mode,
+      draw_cols: draw_cols,
+      draw_rows: draw_rows,
+      off_x: off_x,
+      off_y: off_y,
+      glyph_w: glyph_w,
+      glyph_h: glyph_h,
+      bg_threshold: bg_threshold,
+      glyph_profile: glyph_profile,
+      mask_cache: mask_cache,
+      contrast_profile: contrast_profile,
+      sample_maps: sample_maps
+    } = opts
+
     {line, current_color} =
       Enum.map_reduce(0..(columns - 1), nil, fn col, current_color ->
         inside? =
@@ -1055,11 +1020,11 @@ defmodule Easel.Terminal do
   end
 
   defp rgb_to_ansi256(r, g, b) do
-    if abs(r - g) <= 3 and abs(g - b) <= 3 do
+    if abs(r - g) <= 3 and abs(g - b) <= 3 and abs(r - b) <= 3 do
       if r < 8 do
         16
       else
-        232 + round((r - 8) / 247 * 24)
+        232 + round((r - 8) / 247 * 23)
       end
     else
       r6 = round(r / 255 * 5)
@@ -1070,12 +1035,18 @@ defmodule Easel.Terminal do
   end
 
   defp normalize_ratio(value, fallback) do
-    value = normalize_positive_float(value, fallback)
-
     cond do
-      value < 0 -> 0.0
-      value > 1 -> 1.0
-      true -> value
+      value == 0 or value == 0.0 ->
+        0.0
+
+      true ->
+        value = normalize_positive_float(value, fallback)
+
+        cond do
+          value < 0 -> 0.0
+          value > 1 -> 1.0
+          true -> value
+        end
     end
   end
 
@@ -1276,53 +1247,59 @@ defmodule Easel.Terminal do
     try do
       :wxMemoryDC.setBackground(dc, brush)
       :wxMemoryDC.clear(dc)
-
-      font =
-        :wxFont.new(
-          font_size,
-          wx_const(:wxFONTFAMILY_TELETYPE),
-          wx_const(:wxFONTSTYLE_NORMAL),
-          wx_const(:wxFONTWEIGHT_NORMAL)
-        )
-
-      try do
-        :wxMemoryDC.setFont(dc, font)
-        :wxMemoryDC.setTextForeground(dc, {255, 255, 255})
-
-        charlist = String.to_charlist(ch)
-        {tw, th} = :wxMemoryDC.getTextExtent(dc, charlist)
-
-        x = max(div(glyph_w - tw, 2), 0)
-        y = max(div(glyph_h - th, 2), 0)
-
-        :wxMemoryDC.drawText(dc, charlist, {x, y})
-
-        image = :wxBitmap.convertToImage(bitmap)
-
-        try do
-          data = :wxImage.getData(image)
-          glyph_threshold_byte = round(glyph_threshold * 255)
-
-          Enum.reduce(0..(glyph_w * glyph_h - 1), 0, fn idx, acc ->
-            offset = idx * 3
-            <<r, g, b>> = :binary.part(data, offset, 3)
-
-            if luma(r, g, b) >= glyph_threshold_byte do
-              acc ||| 1 <<< idx
-            else
-              acc
-            end
-          end)
-        after
-          :wxImage.destroy(image)
-        end
-      after
-        :wxFont.destroy(font)
-      end
+      glyph_mask_from_dc(dc, bitmap, ch, glyph_w, glyph_h, glyph_threshold, font_size)
     after
       :wxBrush.destroy(brush)
       :wxMemoryDC.destroy(dc)
       :wxBitmap.destroy(bitmap)
+    end
+  end
+
+  defp glyph_mask_from_dc(dc, bitmap, ch, glyph_w, glyph_h, glyph_threshold, font_size) do
+    font =
+      :wxFont.new(
+        font_size,
+        wx_const(:wxFONTFAMILY_TELETYPE),
+        wx_const(:wxFONTSTYLE_NORMAL),
+        wx_const(:wxFONTWEIGHT_NORMAL)
+      )
+
+    try do
+      :wxMemoryDC.setFont(dc, font)
+      :wxMemoryDC.setTextForeground(dc, {255, 255, 255})
+
+      charlist = String.to_charlist(ch)
+      {tw, th} = :wxMemoryDC.getTextExtent(dc, charlist)
+
+      x = max(div(glyph_w - tw, 2), 0)
+      y = max(div(glyph_h - th, 2), 0)
+
+      :wxMemoryDC.drawText(dc, charlist, {x, y})
+      extract_glyph_mask(bitmap, glyph_w, glyph_h, glyph_threshold)
+    after
+      :wxFont.destroy(font)
+    end
+  end
+
+  defp extract_glyph_mask(bitmap, glyph_w, glyph_h, glyph_threshold) do
+    image = :wxBitmap.convertToImage(bitmap)
+
+    try do
+      data = :wxImage.getData(image)
+      glyph_threshold_byte = round(glyph_threshold * 255)
+
+      Enum.reduce(0..(glyph_w * glyph_h - 1), 0, fn idx, acc ->
+        offset = idx * 3
+        <<r, g, b>> = :binary.part(data, offset, 3)
+
+        if luma(r, g, b) >= glyph_threshold_byte do
+          acc ||| 1 <<< idx
+        else
+          acc
+        end
+      end)
+    after
+      :wxImage.destroy(image)
     end
   end
 

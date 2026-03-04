@@ -81,12 +81,12 @@ export const EaselHook = {
     const templates = JSON.parse(this.el.dataset.templates || "{}");
     Object.assign(this._templates, templates);
     const ops = JSON.parse(this.el.dataset.ops || "[]");
+    const ctx = this.context;
+    const dpr = this._dpr || 1;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, this.el.width, this.el.height);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     if (ops.length > 0) {
-      const ctx = this.context;
-      const dpr = this._dpr || 1;
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.clearRect(0, 0, this.el.width, this.el.height);
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       executeOps(ctx, this._templates, ops);
     }
   },
@@ -122,6 +122,8 @@ export const EaselHook = {
 
     this.handleEvent(`easel:${this.el.id}:draw`, ({ ops, templates }) => {
       if (templates) Object.assign(this._templates, templates);
+      const dpr = this._dpr || 1;
+      this.context.setTransform(dpr, 0, 0, dpr, 0, 0);
       executeOps(this.context, this._templates, ops);
     });
 

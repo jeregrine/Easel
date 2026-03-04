@@ -295,12 +295,12 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
             this.ensureDpr();
             this.loadTemplates();
             const ops = JSON.parse(this.el.dataset.ops || "[]");
+            const ctx = this.context;
+            const dpr = this.dpr || 1;
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.clearRect(0, 0, this.el.width, this.el.height);
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
             if (ops.length > 0) {
-              const ctx = this.context;
-              const dpr = this.dpr || 1;
-              ctx.setTransform(1, 0, 0, 1, 0, 0);
-              ctx.clearRect(0, 0, this.el.width, this.el.height);
-              ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
               this.executeOps(ops);
             }
           },
@@ -338,6 +338,8 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
 
             this.handleEvent(`easel:${this.el.id}:draw`, ({ ops, templates }) => {
               if (templates) Object.assign(this.templates, templates);
+              const dpr = this.dpr || 1;
+              this.context.setTransform(dpr, 0, 0, dpr, 0, 0);
               this.executeOps(ops);
             });
 
@@ -509,6 +511,25 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
     end
 
     def canvas_stack(assigns) do
+      # Find the topmost event-enabled layer (layers are in bottom-to-top order).
+      # Only that layer gets pointer-events: auto; all others get pointer-events: none.
+      {layers_with_pe, _found_top} =
+        assigns.layer
+        |> Enum.reverse()
+        |> Enum.map_reduce(false, fn layer, found_top ->
+          has_events =
+            Map.get(layer, :on_click, false) or
+              Map.get(layer, :on_mouse_down, false) or
+              Map.get(layer, :on_mouse_up, false) or
+              Map.get(layer, :on_mouse_move, false) or
+              Map.get(layer, :on_key_down, false)
+
+          pe = if has_events and not found_top, do: "auto", else: "none"
+          {Map.put(layer, :__pointer_events, pe), found_top or has_events}
+        end)
+
+      assigns = assign(assigns, :layer, Enum.reverse(layers_with_pe))
+
       ~H"""
       <div id={@id} class={@class} style={"position: relative; width: #{@width}px; height: #{@height}px;"} {@rest}>
         <.canvas
@@ -518,7 +539,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
           height={@height}
           ops={Map.get(layer, :ops, [])}
           templates={Map.get(layer, :templates, %{})}
-          style="position: absolute; top: 0; left: 0;"
+          style={"position: absolute; top: 0; left: 0; pointer-events: #{Map.get(layer, :__pointer_events, "none")};"}
           on_click={Map.get(layer, :on_click, false)}
           on_mouse_down={Map.get(layer, :on_mouse_down, false)}
           on_mouse_up={Map.get(layer, :on_mouse_up, false)}
@@ -615,19 +636,22 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       interval = Keyword.get(opts, :interval, 16)
       canvas_assign = Keyword.get(opts, :canvas_assign, nil)
 
-      anim_key = animation_key(id)
+      timer_ref =
+        if Phoenix.LiveView.connected?(socket) do
+          Process.send_after(self(), {:easel_tick, id}, interval)
+        end
 
-      if Phoenix.LiveView.connected?(socket) do
-        Process.send_after(self(), {:easel_tick, id}, interval)
-      end
-
-      Phoenix.Component.assign(socket, anim_key, %{
+      anim = %{
         tick_fn: tick_fn,
         state_key: state_key,
         canvas_assign: canvas_assign,
         interval: interval,
-        running: true
-      })
+        running: true,
+        timer_ref: timer_ref
+      }
+
+      animations = Map.get(socket.assigns, :__easel_animations, %{})
+      Phoenix.Component.assign(socket, :__easel_animations, Map.put(animations, id, anim))
     end
 
     @doc """
@@ -638,17 +662,20 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
         end
     """
     def tick(socket, id) do
-      anim_key = animation_key(id)
-      anim = socket.assigns[anim_key]
+      animations = Map.get(socket.assigns, :__easel_animations, %{})
+      anim = Map.get(animations, id)
 
       if anim && anim.running do
         state = socket.assigns[anim.state_key]
         {canvas, new_state} = anim.tick_fn.(state)
         canvas = Easel.render(canvas)
 
-        # Schedule next tick
-        Process.send_after(self(), {:easel_tick, id}, anim.interval)
+        # Schedule next tick and store timer_ref
+        timer_ref = Process.send_after(self(), {:easel_tick, id}, anim.interval)
+        updated_anim = %{anim | timer_ref: timer_ref}
+        animations = Map.put(animations, id, updated_anim)
 
+        socket = Phoenix.Component.assign(socket, :__easel_animations, animations)
         socket = Phoenix.Component.assign(socket, anim.state_key, new_state)
 
         # Update canvas assign so the template re-renders with new ops
@@ -666,19 +693,17 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
     Stops a running animation.
     """
     def stop_animation(socket, id) do
-      anim_key = animation_key(id)
-      anim = socket.assigns[anim_key]
+      animations = Map.get(socket.assigns, :__easel_animations, %{})
 
-      if anim do
-        Phoenix.Component.assign(socket, anim_key, %{anim | running: false})
-      else
-        socket
+      case Map.get(animations, id) do
+        nil ->
+          socket
+
+        anim ->
+          if anim.timer_ref, do: Process.cancel_timer(anim.timer_ref)
+          updated = Map.put(animations, id, %{anim | running: false})
+          Phoenix.Component.assign(socket, :__easel_animations, updated)
       end
-    end
-
-    defp animation_key(id) do
-      safe = String.replace(id, ~r/[^a-zA-Z0-9_]/, "_")
-      String.to_atom("easel_anim_#{safe}")
     end
   end
 end

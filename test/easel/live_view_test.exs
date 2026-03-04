@@ -236,7 +236,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
 
         socket = Easel.LiveView.animate(socket, "anim-canvas", :counter, tick_fn)
 
-        anim = socket.assigns[:easel_anim_anim_canvas]
+        anim = socket.assigns[:__easel_animations]["anim-canvas"]
         assert anim.running == true
         assert anim.state_key == :counter
         assert anim.interval == 16
@@ -248,7 +248,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
 
         socket = Easel.LiveView.animate(socket, "c1", :counter, tick_fn, interval: 1000)
 
-        anim = socket.assigns[:easel_anim_c1]
+        anim = socket.assigns[:__easel_animations]["c1"]
         assert anim.interval == 1000
       end
 
@@ -262,7 +262,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
 
         socket = Easel.LiveView.animate(socket, "c1", :counter, tick_fn, canvas_assign: :canvas)
 
-        anim = socket.assigns[:easel_anim_c1]
+        anim = socket.assigns[:__easel_animations]["c1"]
         assert anim.canvas_assign == :canvas
       end
 
@@ -299,7 +299,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
         socket = Easel.LiveView.animate(socket, "c1", :counter, tick_fn)
         socket = Easel.LiveView.stop_animation(socket, "c1")
 
-        anim = socket.assigns[:easel_anim_c1]
+        anim = socket.assigns[:__easel_animations]["c1"]
         assert anim.running == false
       end
 

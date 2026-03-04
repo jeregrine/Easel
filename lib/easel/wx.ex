@@ -244,18 +244,40 @@ defmodule Easel.WX do
 
     {weight, parts} =
       case parts do
-        ["bold" | rest] -> {:wxFONTWEIGHT_BOLD, rest}
-        ["lighter" | rest] -> {:wxFONTWEIGHT_LIGHT, rest}
-        other -> {:wxFONTWEIGHT_NORMAL, other}
+        ["bold" | rest] ->
+          {:wxFONTWEIGHT_BOLD, rest}
+
+        ["lighter" | rest] ->
+          {:wxFONTWEIGHT_LIGHT, rest}
+
+        [w | rest] = all ->
+          case Float.parse(w) do
+            {n, ""} when n >= 100 and n <= 900 ->
+              weight =
+                cond do
+                  n >= 600 -> :wxFONTWEIGHT_BOLD
+                  n >= 400 -> :wxFONTWEIGHT_NORMAL
+                  true -> :wxFONTWEIGHT_LIGHT
+                end
+
+              {weight, rest}
+
+            _ ->
+              {:wxFONTWEIGHT_NORMAL, all}
+          end
+
+        other ->
+          {:wxFONTWEIGHT_NORMAL, other}
       end
 
     {size, face} =
       case parts do
         [size_str | face_parts] ->
           size =
-            size_str
-            |> String.replace(~r/px$/, "")
-            |> String.to_integer()
+            case Float.parse(String.replace(size_str, ~r/px$/, "")) do
+              {n, _} when n > 0 -> round(n)
+              _ -> 10
+            end
 
           face =
             case face_parts do
@@ -482,8 +504,10 @@ defmodule Easel.WX do
           bitmap_dc = :wxMemoryDC.new(bitmap)
 
           try do
-            :wxMemoryDC.setBackground(bitmap_dc, :wxBrush.new({255, 255, 255, 255}))
+            bg_brush = :wxBrush.new({255, 255, 255, 255})
+            :wxMemoryDC.setBackground(bitmap_dc, bg_brush)
             :wxMemoryDC.clear(bitmap_dc)
+            :wxBrush.destroy(bg_brush)
 
             gc = :wxGraphicsContext.create(bitmap_dc)
 
@@ -565,7 +589,7 @@ defmodule Easel.WX do
 
         sizer = :wxBoxSizer.new(@wx_vertical)
         :wxSizer.add(sizer, panel, flag: @wx_expand, proportion: 1)
-        :wxPanel.setSizer(frame, sizer)
+        :wxPanel.setSizer(panel, sizer)
         :wxSizer.layout(sizer)
 
         frame_size = :wxFrame.getSize(frame)
@@ -770,8 +794,10 @@ defmodule Easel.WX do
       panel_dc = :wxPaintDC.new(panel)
       bitmap_dc = :wxMemoryDC.new(bitmap)
 
-      :wxMemoryDC.setBackground(bitmap_dc, :wxBrush.new({255, 255, 255, 255}))
+      bg_brush = :wxBrush.new({255, 255, 255, 255})
+      :wxMemoryDC.setBackground(bitmap_dc, bg_brush)
       :wxMemoryDC.clear(bitmap_dc)
+      :wxBrush.destroy(bg_brush)
 
       gc = :wxGraphicsContext.create(bitmap_dc)
       :wxGraphicsContext.scale(gc, dpr, dpr)
@@ -894,10 +920,10 @@ defmodule Easel.WX do
     defp execute_op(["fillRect", [x, y, w, h]], state) do
       apply_brush(state)
 
-      :wxGraphicsContext.setPen(
-        state.gc,
+      transparent_pen =
         :wxPen.new({0, 0, 0, 0}, width: 0, style: wx_const(:wxPENSTYLE_TRANSPARENT))
-      )
+
+      :wxGraphicsContext.setPen(state.gc, transparent_pen)
 
       :wxGraphicsContext.drawRectangle(
         state.gc,
@@ -907,16 +933,15 @@ defmodule Easel.WX do
         to_float(h)
       )
 
+      :wxPen.destroy(transparent_pen)
       state
     end
 
     defp execute_op(["strokeRect", [x, y, w, h]], state) do
       apply_pen(state)
 
-      :wxGraphicsContext.setBrush(
-        state.gc,
-        :wxBrush.new({0, 0, 0, 0}, style: wx_const(:wxBRUSHSTYLE_TRANSPARENT))
-      )
+      transparent_brush = :wxBrush.new({0, 0, 0, 0}, style: wx_const(:wxBRUSHSTYLE_TRANSPARENT))
+      :wxGraphicsContext.setBrush(state.gc, transparent_brush)
 
       :wxGraphicsContext.drawRectangle(
         state.gc,
@@ -926,15 +951,24 @@ defmodule Easel.WX do
         to_float(h)
       )
 
+      :wxBrush.destroy(transparent_brush)
       state
     end
 
     defp execute_op(["clearRect", [x, y, w, h]], state) do
-      :wxGraphicsContext.setBrush(state.gc, :wxBrush.new({255, 255, 255, 255}))
+      # Known limitation: the wx bitmap is RGB (no alpha channel), so clearRect
+      # fills with white rather than true transparency. This is correct for most
+      # use cases where the canvas background is white.
+      white_brush = :wxBrush.new({255, 255, 255, 255})
+
+      transparent_pen =
+        :wxPen.new({0, 0, 0, 0}, width: 0, style: wx_const(:wxPENSTYLE_TRANSPARENT))
+
+      :wxGraphicsContext.setBrush(state.gc, white_brush)
 
       :wxGraphicsContext.setPen(
         state.gc,
-        :wxPen.new({0, 0, 0, 0}, width: 0, style: wx_const(:wxPENSTYLE_TRANSPARENT))
+        transparent_pen
       )
 
       :wxGraphicsContext.drawRectangle(
@@ -945,6 +979,8 @@ defmodule Easel.WX do
         to_float(h)
       )
 
+      :wxBrush.destroy(white_brush)
+      :wxPen.destroy(transparent_pen)
       state
     end
 
@@ -1028,6 +1064,16 @@ defmodule Easel.WX do
       state = ensure_path(state)
       [cx, cy, rx, ry, rotation, start_angle, end_angle | _rest] = args
 
+      tau = 2 * :math.pi()
+      is_full_ellipse = abs(to_float(end_angle) - to_float(start_angle)) >= tau - 0.0001
+
+      if to_float(rotation) != 0.0 or not is_full_ellipse do
+        raise UnsupportedOpError,
+          op:
+            "ellipse with rotation or partial arc (rotation=#{rotation}, " <>
+              "start=#{start_angle}, end=#{end_angle})"
+      end
+
       :wxGraphicsPath.addEllipse(
         state.path,
         to_float(cx) - to_float(rx),
@@ -1036,7 +1082,6 @@ defmodule Easel.WX do
         to_float(ry) * 2
       )
 
-      _ = {rotation, start_angle, end_angle}
       state
     end
 
@@ -1113,8 +1158,7 @@ defmodule Easel.WX do
     end
 
     defp execute_op(["strokeText", [text, x, y | _rest]], state) do
-      apply_font(state)
-      apply_brush(state)
+      apply_font(state, state.stroke_style)
       {dx, dy} = text_offset(state, text)
 
       :wxGraphicsContext.drawText(
@@ -1234,7 +1278,18 @@ defmodule Easel.WX do
     end
 
     defp set_property("textBaseline", value, state) do
-      %{state | text_baseline: String.to_atom(value)}
+      baseline =
+        case value do
+          "top" -> :top
+          "hanging" -> :hanging
+          "middle" -> :middle
+          "alphabetic" -> :alphabetic
+          "ideographic" -> :ideographic
+          "bottom" -> :bottom
+          _ -> :alphabetic
+        end
+
+      %{state | text_baseline: baseline}
     end
 
     defp set_property(key, _value, _state) do
@@ -1294,6 +1349,7 @@ defmodule Easel.WX do
       {r, g, b, a} = apply_alpha(state.fill_style, state.global_alpha)
       brush = :wxBrush.new({r, g, b, a})
       :wxGraphicsContext.setBrush(state.gc, brush)
+      :wxBrush.destroy(brush)
     end
 
     defp apply_pen(state) do
@@ -1310,9 +1366,12 @@ defmodule Easel.WX do
       :wxPen.setCap(pen, wx_const(state.line_cap))
       :wxPen.setJoin(pen, wx_const(state.line_join))
       :wxGraphicsContext.setPen(state.gc, pen)
+      :wxPen.destroy(pen)
     end
 
-    defp apply_font(state) do
+    defp apply_font(state, color \\ nil) do
+      wx_color = tuple_to_wx_colour(color || state.fill_style)
+
       font =
         :wxFont.new(
           state.font_size,
@@ -1322,7 +1381,8 @@ defmodule Easel.WX do
           face: state.font_face
         )
 
-      :wxGraphicsContext.setFont(state.gc, font, tuple_to_wx_colour(state.fill_style))
+      :wxGraphicsContext.setFont(state.gc, font, wx_color)
+      :wxFont.destroy(font)
     end
 
     defp apply_alpha({r, g, b, a}, global_alpha) do

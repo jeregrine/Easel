@@ -72,6 +72,11 @@ defmodule Easel do
   Operations are stored in reverse order for efficient prepend.
   Call `render/1` to finalize the ops list into correct order.
   """
+  def push_op(%Easel{rendered: true} = ctx, op) do
+    # ops is in forward order when rendered; un-reverse before prepending
+    %{ctx | ops: [op | Enum.reverse(ctx.ops)], rendered: false}
+  end
+
   def push_op(%Easel{} = ctx, op) do
     %{ctx | ops: [op | ctx.ops], rendered: false}
   end
@@ -710,7 +715,12 @@ defmodule Easel do
   defp palette_lookup(_palette, _), do: nil
 
   defp expand_instances(name, instances, templates) do
-    tpl_ops = Map.get(templates, String.to_existing_atom(name), [])
+    tpl_ops =
+      try do
+        Map.get(templates, String.to_existing_atom(name), [])
+      rescue
+        ArgumentError -> []
+      end
 
     Enum.flat_map(instances, fn inst ->
       style_ops =
@@ -728,7 +738,9 @@ defmodule Easel do
 
       transform_ops =
         [["translate", [inst[:x] || 0, inst[:y] || 0]]]
-        |> then(fn ops -> if inst[:rotate], do: ops ++ [["rotate", [inst.rotate]]], else: ops end)
+        |> then(fn ops ->
+          if not is_nil(inst[:rotate]), do: ops ++ [["rotate", [inst.rotate]]], else: ops
+        end)
         |> then(fn ops ->
           if inst[:scale_x] || inst[:scale_y] do
             ops ++ [["scale", [inst[:scale_x] || 1, inst[:scale_y] || 1]]]
