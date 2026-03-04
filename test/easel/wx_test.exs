@@ -119,6 +119,8 @@ defmodule Easel.WXTest do
     test "handles malformed hex" do
       assert Easel.WX.parse_color("#12") == {0, 0, 0, 255}
       assert Easel.WX.parse_color("#1234567890") == {0, 0, 0, 255}
+      assert Easel.WX.parse_color("#ggg") == {0, 0, 0, 255}
+      assert Easel.WX.parse_color("#zzzzzz") == {0, 0, 0, 255}
     end
   end
 

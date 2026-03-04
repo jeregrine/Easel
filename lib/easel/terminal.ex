@@ -18,14 +18,17 @@ defmodule Easel.Terminal do
   @default_glyph_threshold 0.5
   @default_dark_min_luma 0.28
   @default_light_max_luma 0.72
+  @glyph_profile_cache_table :easel_terminal_glyph_profile_cache
+  @glyph_profile_cache_limit 128
 
-  @termite_available Code.ensure_loaded?(Termite)
+  @termite_available Code.ensure_loaded?(Module.concat([Termite, Terminal])) and
+                       Code.ensure_loaded?(Module.concat([Termite, Screen]))
 
   @doc """
   Returns `true` when both wx rasterization and Termite terminal I/O are available.
   """
   def available? do
-    Code.ensure_loaded?(Termite) and Easel.WX.available?() and tty_available?()
+    @termite_available and Easel.WX.available?() and tty_available?()
   end
 
   @doc """
@@ -134,6 +137,22 @@ defmodule Easel.Terminal do
       with_terminal(opts, fn term ->
         animate_loop(term, width, height, state, fun, opts, interval_ms)
       end)
+    end
+
+    defp ensure_wx_available! do
+      if Easel.WX.available?() do
+        :ok
+      else
+        raise "Easel.Terminal requires Erlang compiled with wx support."
+      end
+    end
+
+    defp ensure_tty_available! do
+      if tty_available?() do
+        :ok
+      else
+        raise "Easel.Terminal requires an interactive TTY. Run it from a real terminal session."
+      end
     end
 
     defp animate_loop(term, width, height, state, fun, opts, interval_ms) do
@@ -323,8 +342,10 @@ defmodule Easel.Terminal do
     end
 
     defp restore_terminal(opts) do
-      if function_exported?(@termite_screen, :emergency_restore, 0) do
-        apply(@termite_screen, :emergency_restore, [])
+      screen_mod = Module.concat([Termite, Screen])
+
+      if function_exported?(screen_mod, :emergency_restore, 0) do
+        apply(screen_mod, :emergency_restore, [])
       else
         [
           IO.ANSI.reset(),
@@ -436,31 +457,29 @@ defmodule Easel.Terminal do
     defp quit_key?(_), do: false
 
     defp t_start do
-      Termite.Terminal.start()
+      apply(Module.concat([Termite, Terminal]), :start, [])
     rescue
       MatchError ->
         raise "Easel.Terminal requires an interactive TTY. Run it from a real terminal session."
     end
 
-    defp t_resize(term), do: Termite.Terminal.resize(term)
+    defp t_resize(term), do: apply(Module.concat([Termite, Terminal]), :resize, [term])
 
     defp t_poll_event(term, timeout) do
-      Termite.Terminal.poll(term, timeout)
+      apply(Module.concat([Termite, Terminal]), :poll, [term, timeout])
       |> normalize_poll_message()
-    end
-
-    defp normalize_poll_message({:data, _} = message) do
-      Termite.Input.parse(message)
     end
 
     defp normalize_poll_message(message), do: message
 
-    defp t_write(term, value), do: Termite.Screen.write(term, value)
-    defp t_clear_screen(term), do: Termite.Screen.clear_screen(term)
-    defp t_alt_screen(term), do: Termite.Screen.alt_screen(term)
-    defp t_hide_cursor(term), do: Termite.Screen.hide_cursor(term)
-    defp t_title(term, title), do: Termite.Screen.title(term, title)
-    defp t_cursor_position(term, x, y), do: Termite.Screen.cursor_position(term, x, y)
+    defp t_write(term, value), do: apply(Module.concat([Termite, Screen]), :write, [term, value])
+    defp t_clear_screen(term), do: apply(Module.concat([Termite, Screen]), :clear_screen, [term])
+    defp t_alt_screen(term), do: apply(Module.concat([Termite, Screen]), :alt_screen, [term])
+    defp t_hide_cursor(term), do: apply(Module.concat([Termite, Screen]), :hide_cursor, [term])
+    defp t_title(term, title), do: apply(Module.concat([Termite, Screen]), :title, [term, title])
+
+    defp t_cursor_position(term, x, y),
+      do: apply(Module.concat([Termite, Screen]), :cursor_position, [term, x, y])
 
     defp teardown_char_mask_cache do
       key = {__MODULE__, :char_mask_cache_table}
@@ -1160,21 +1179,57 @@ defmodule Easel.Terminal do
         font_size_default
       )
 
-    key = {__MODULE__, :glyph_profile, glyph_w, glyph_h, glyph_threshold, font_size}
+    key = {glyph_w, glyph_h, glyph_threshold, font_size}
+    table = ensure_glyph_profile_cache_table()
 
-    case :persistent_term.get(key, :undefined) do
-      :undefined ->
+    case :ets.lookup(table, key) do
+      [{^key, profile}] ->
+        profile
+
+      [] ->
         profile =
           with_local_wx_env(fn ->
             build_glyph_profile(glyph_w, glyph_h, glyph_threshold, font_size)
           end)
 
-        :persistent_term.put(key, profile)
-        profile
+        # Avoid duplicate writes under contention.
+        _ = :ets.insert_new(table, {key, profile})
+        maybe_trim_glyph_profile_cache(table, key, profile)
 
-      profile ->
-        profile
+        case :ets.lookup(table, key) do
+          [{^key, cached}] -> cached
+          [] -> profile
+        end
     end
+  end
+
+  defp ensure_glyph_profile_cache_table do
+    case :ets.whereis(@glyph_profile_cache_table) do
+      :undefined ->
+        try do
+          :ets.new(@glyph_profile_cache_table, [
+            :named_table,
+            :set,
+            :public,
+            read_concurrency: true,
+            write_concurrency: true
+          ])
+        rescue
+          ArgumentError -> @glyph_profile_cache_table
+        end
+
+      tid ->
+        tid
+    end
+  end
+
+  defp maybe_trim_glyph_profile_cache(table, key, profile) do
+    if :ets.info(table, :size) > @glyph_profile_cache_limit do
+      :ets.delete_all_objects(table)
+      true = :ets.insert(table, {key, profile})
+    end
+
+    :ok
   end
 
   defp with_local_wx_env(fun) do

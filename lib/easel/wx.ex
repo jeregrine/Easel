@@ -83,9 +83,7 @@ defmodule Easel.WX do
   Supports named colors, hex (`#rgb`, `#rrggbb`, `#rrggbbaa`),
   `rgb()`, and `rgba()`.
   """
-  def parse_color(value, alpha \\ 1.0)
-
-  def parse_color(value, _alpha) when is_binary(value) do
+  def parse_color(value) when is_binary(value) do
     value = String.trim(value) |> String.downcase()
 
     cond do
@@ -112,28 +110,50 @@ defmodule Easel.WX do
     end
   end
 
-  def parse_color(_value, _alpha), do: {0, 0, 0, 255}
+  def parse_color(_value), do: {0, 0, 0, 255}
+
+  @doc false
+  def parse_color(value, _alpha), do: parse_color(value)
 
   defp parse_hex_color("#" <> hex) do
     case String.length(hex) do
       3 ->
         <<r::binary-1, g::binary-1, b::binary-1>> = hex
-        {parse_hex(r <> r), parse_hex(g <> g), parse_hex(b <> b), 255}
+        parse_hex_components([r <> r, g <> g, b <> b])
 
       6 ->
         <<r::binary-2, g::binary-2, b::binary-2>> = hex
-        {parse_hex(r), parse_hex(g), parse_hex(b), 255}
+        parse_hex_components([r, g, b])
 
       8 ->
         <<r::binary-2, g::binary-2, b::binary-2, a::binary-2>> = hex
-        {parse_hex(r), parse_hex(g), parse_hex(b), parse_hex(a)}
+        parse_hex_components([r, g, b, a])
 
       _ ->
         {0, 0, 0, 255}
     end
   end
 
-  defp parse_hex(s), do: String.to_integer(s, 16)
+  defp parse_hex_components(parts) do
+    case Enum.map(parts, &parse_hex/1) do
+      [r, g, b] when is_integer(r) and is_integer(g) and is_integer(b) ->
+        {r, g, b, 255}
+
+      [r, g, b, a]
+      when is_integer(r) and is_integer(g) and is_integer(b) and is_integer(a) ->
+        {r, g, b, a}
+
+      _ ->
+        {0, 0, 0, 255}
+    end
+  end
+
+  defp parse_hex(s) do
+    case Integer.parse(s, 16) do
+      {n, ""} -> n
+      _ -> :error
+    end
+  end
 
   defp parse_rgba(str) do
     case Regex.run(~r/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([\d.]+)\s*\)/, str) do
@@ -792,35 +812,47 @@ defmodule Easel.WX do
            dpr: dpr
          }) do
       panel_dc = :wxPaintDC.new(panel)
-      bitmap_dc = :wxMemoryDC.new(bitmap)
 
-      bg_brush = :wxBrush.new({255, 255, 255, 255})
-      :wxMemoryDC.setBackground(bitmap_dc, bg_brush)
-      :wxMemoryDC.clear(bitmap_dc)
-      :wxBrush.destroy(bg_brush)
+      try do
+        bitmap_dc = :wxMemoryDC.new(bitmap)
 
-      gc = :wxGraphicsContext.create(bitmap_dc)
-      :wxGraphicsContext.scale(gc, dpr, dpr)
+        try do
+          bg_brush = :wxBrush.new({255, 255, 255, 255})
 
-      Enum.reduce(ops, initial_draw_state(gc, width, height), &execute_op/2)
+          try do
+            :wxMemoryDC.setBackground(bitmap_dc, bg_brush)
+            :wxMemoryDC.clear(bitmap_dc)
+          after
+            :wxBrush.destroy(bg_brush)
+          end
 
-      # GC must be destroyed to flush drawing to the bitmap DC before blit
-      :wxGraphicsContext.destroy(gc)
+          gc = :wxGraphicsContext.create(bitmap_dc)
 
-      bw = round(width * dpr)
-      bh = round(height * dpr)
-      :wxDC.setUserScale(panel_dc, 1.0 / dpr, 1.0 / dpr)
+          try do
+            :wxGraphicsContext.scale(gc, dpr, dpr)
+            Enum.reduce(ops, initial_draw_state(gc, width, height), &execute_op/2)
+          after
+            # GC must be destroyed to flush drawing to the bitmap DC before blit
+            :wxGraphicsContext.destroy(gc)
+          end
 
-      :wxPaintDC.blit(
-        panel_dc,
-        {0, 0},
-        {bw, bh},
-        bitmap_dc,
-        {0, 0}
-      )
+          bw = round(width * dpr)
+          bh = round(height * dpr)
+          :wxDC.setUserScale(panel_dc, 1.0 / dpr, 1.0 / dpr)
 
-      :wxPaintDC.destroy(panel_dc)
-      :wxMemoryDC.destroy(bitmap_dc)
+          :wxPaintDC.blit(
+            panel_dc,
+            {0, 0},
+            {bw, bh},
+            bitmap_dc,
+            {0, 0}
+          )
+        after
+          :wxMemoryDC.destroy(bitmap_dc)
+        end
+      after
+        :wxPaintDC.destroy(panel_dc)
+      end
     end
 
     # ── Operations ──────────────────────────────────────────────────
@@ -1215,11 +1247,11 @@ defmodule Easel.WX do
     # ── Property setters ────────────────────────────────────────────
 
     defp set_property("fillStyle", value, state) do
-      %{state | fill_style: parse_color(value, state.global_alpha)}
+      %{state | fill_style: parse_color(value)}
     end
 
     defp set_property("strokeStyle", value, state) do
-      %{state | stroke_style: parse_color(value, state.global_alpha)}
+      %{state | stroke_style: parse_color(value)}
     end
 
     defp set_property("lineWidth", value, state) do

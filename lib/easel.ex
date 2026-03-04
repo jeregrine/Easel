@@ -671,11 +671,13 @@ defmodule Easel do
     expanded =
       Enum.flat_map(ctx.ops, fn
         ["__instances", [name, rows, palette, cols]] ->
-          instances = Enum.map(rows, &row_to_instance(&1, palette, cols || []))
+          col_pos = col_positions(cols || [])
+          instances = Enum.map(rows, &row_to_instance(&1, palette, col_pos))
           expand_instances(name, instances, ctx.templates)
 
         ["__instances", [name, rows, palette]] ->
-          instances = Enum.map(rows, &row_to_instance(&1, palette, [0, 1, 2, 3, 4, 5, 6, 7]))
+          col_pos = col_positions([0, 1, 2, 3, 4, 5, 6, 7])
+          instances = Enum.map(rows, &row_to_instance(&1, palette, col_pos))
           expand_instances(name, instances, ctx.templates)
 
         ["__instances", [name, instances]] ->
@@ -688,9 +690,11 @@ defmodule Easel do
     %{ctx | ops: expanded}
   end
 
-  defp row_to_instance(row, palette, cols) do
-    col_pos = cols |> Enum.with_index() |> Map.new()
+  defp col_positions(cols) do
+    cols |> Enum.with_index() |> Map.new()
+  end
 
+  defp row_to_instance(row, palette, col_pos) do
     get = fn col_idx ->
       case Map.get(col_pos, col_idx) do
         nil -> nil
