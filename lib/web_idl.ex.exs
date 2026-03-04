@@ -1,3 +1,5 @@
+# Template parser source used by scripts/regenerate_canvas_api.exs.
+
 defmodule Easel.WebIDL do
   @moduledoc """
   A WebIDL parser for Canvas2D using NimbleParsec.
@@ -6,6 +8,118 @@ defmodule Easel.WebIDL do
   with their arguments, types, optionality, and default values.
   """
 
+  @compile :nowarn_unused_vars
+
+  # Helpers used by NimbleParsec reduce callbacks.
+  defp join_type(parts) do
+    parts
+    |> List.flatten()
+    |> Enum.map(fn
+      i when is_integer(i) -> <<i>>
+      s -> s
+    end)
+    |> Enum.join(" ")
+    |> String.replace(~r/\s+/, " ")
+    |> String.trim()
+  end
+
+  defp parse_number(parts) do
+    str =
+      parts
+      |> List.flatten()
+      |> Enum.map(fn
+        i when is_integer(i) -> <<i>>
+        s -> s
+      end)
+      |> Enum.join()
+
+    cond do
+      String.starts_with?(str, "0x") or String.starts_with?(str, "-0x") ->
+        {n, ""} = Integer.parse(str, 16)
+        n
+
+      String.contains?(str, ".") ->
+        {f, ""} = Float.parse(str)
+        f
+
+      true ->
+        {n, ""} = Integer.parse(str)
+        n
+    end
+  end
+
+  defp build_argument(parts) do
+    parts = Map.new(parts)
+
+    %{
+      "name" => parts[:name],
+      "optional" => Map.get(parts, :optional, false),
+      "idlType" => %{"idlType" => parts[:type]},
+      "default" => build_default(parts[:default])
+    }
+  end
+
+  defp build_default(nil), do: nil
+  defp build_default({:string, v}), do: %{"type" => "string", "value" => v}
+  defp build_default({:boolean, v}), do: %{"type" => "boolean", "value" => v}
+  defp build_default({:null, _}), do: %{"type" => "null"}
+  defp build_default({:dictionary, _}), do: %{"type" => "dictionary"}
+  defp build_default({:number, v}), do: %{"type" => "number", "value" => v}
+
+  defp build_readonly_attribute(parts) do
+    parts = Map.new(parts)
+
+    %{
+      "type" => "attribute",
+      "name" => parts[:name],
+      "readonly" => true,
+      "idlType" => %{"idlType" => parts[:type]}
+    }
+  end
+
+  defp build_writable_attribute(parts) do
+    parts = Map.new(parts)
+
+    %{
+      "type" => "attribute",
+      "name" => parts[:name],
+      "readonly" => false,
+      "idlType" => %{"idlType" => parts[:type]}
+    }
+  end
+
+  defp build_operation(parts) do
+    parts = Map.new(parts)
+
+    %{
+      "type" => "operation",
+      "name" => parts[:name],
+      "returnType" => %{"idlType" => parts[:return_type]},
+      "arguments" => parts[:arguments]
+    }
+  end
+
+  defp build_interface_mixin(parts) do
+    parts = Map.new(parts)
+
+    %{
+      "type" => "interface mixin",
+      "name" => parts[:name],
+      "members" => Enum.reject(parts[:members], &(&1 == :skip))
+    }
+  end
+
+  defp build_interface(parts) do
+    parts = Map.new(parts)
+
+    %{
+      "type" => "interface",
+      "name" => parts[:name],
+      "members" => Enum.reject(parts[:members], &(&1 == :skip))
+    }
+  end
+
+  # parsec:Easel.WebIDL
   import NimbleParsec
 
   # ── Whitespace & comments ──────────────────────────────────────────
@@ -70,8 +184,8 @@ defmodule Easel.WebIDL do
       ])
     )
 
-  defcombinatorp(:paren_inner, paren_content)
-  defcombinatorp(:angle_inner, angle_content)
+  defcombinator(:paren_inner, paren_content)
+  defcombinator(:angle_inner, angle_content)
 
   # A type expression — reads tokens until we hit an identifier that would be an arg name
   # We'll handle this differently: parse type as part of argument/attribute parsing
@@ -122,19 +236,7 @@ defmodule Easel.WebIDL do
       type_simple
     ])
 
-  defcombinatorp(:type_expr, type_expr)
-
-  defp join_type(parts) do
-    parts
-    |> List.flatten()
-    |> Enum.map(fn
-      i when is_integer(i) -> <<i>>
-      s -> s
-    end)
-    |> Enum.join(" ")
-    |> String.replace(~r/\s+/, " ")
-    |> String.trim()
-  end
+  defcombinator(:type_expr, type_expr)
 
   # ── Default values ─────────────────────────────────────────────────
 
@@ -176,31 +278,6 @@ defmodule Easel.WebIDL do
       number_default
     ])
 
-  defp parse_number(parts) do
-    str =
-      parts
-      |> List.flatten()
-      |> Enum.map(fn
-        i when is_integer(i) -> <<i>>
-        s -> s
-      end)
-      |> Enum.join()
-
-    cond do
-      String.starts_with?(str, "0x") or String.starts_with?(str, "-0x") ->
-        {n, ""} = Integer.parse(str, 16)
-        n
-
-      String.contains?(str, ".") ->
-        {f, ""} = Float.parse(str)
-        f
-
-      true ->
-        {n, ""} = Integer.parse(str)
-        n
-    end
-  end
-
   # ── Extended attributes (we skip them) ─────────────────────────────
 
   ext_attrs =
@@ -223,7 +300,7 @@ defmodule Easel.WebIDL do
       ])
     )
 
-  defcombinatorp(:paren_inner_bracket, bracket_content)
+  defcombinator(:paren_inner_bracket, bracket_content)
 
   # ── Arguments ──────────────────────────────────────────────────────
 
@@ -257,24 +334,6 @@ defmodule Easel.WebIDL do
         |> concat(single_argument)
       )
     )
-
-  defp build_argument(parts) do
-    parts = Map.new(parts)
-
-    %{
-      "name" => parts[:name],
-      "optional" => Map.get(parts, :optional, false),
-      "idlType" => %{"idlType" => parts[:type]},
-      "default" => build_default(parts[:default])
-    }
-  end
-
-  defp build_default(nil), do: nil
-  defp build_default({:string, v}), do: %{"type" => "string", "value" => v}
-  defp build_default({:boolean, v}), do: %{"type" => "boolean", "value" => v}
-  defp build_default({:null, _}), do: %{"type" => "null"}
-  defp build_default({:dictionary, _}), do: %{"type" => "dictionary"}
-  defp build_default({:number, v}), do: %{"type" => "number", "value" => v}
 
   # ── Members ────────────────────────────────────────────────────────
 
@@ -324,39 +383,6 @@ defmodule Easel.WebIDL do
     |> ignore(string(";"))
     |> reduce(:build_operation)
 
-  defp build_readonly_attribute(parts) do
-    parts = Map.new(parts)
-
-    %{
-      "type" => "attribute",
-      "name" => parts[:name],
-      "readonly" => true,
-      "idlType" => %{"idlType" => parts[:type]}
-    }
-  end
-
-  defp build_writable_attribute(parts) do
-    parts = Map.new(parts)
-
-    %{
-      "type" => "attribute",
-      "name" => parts[:name],
-      "readonly" => false,
-      "idlType" => %{"idlType" => parts[:type]}
-    }
-  end
-
-  defp build_operation(parts) do
-    parts = Map.new(parts)
-
-    %{
-      "type" => "operation",
-      "name" => parts[:name],
-      "returnType" => %{"idlType" => parts[:return_type]},
-      "arguments" => parts[:arguments]
-    }
-  end
-
   member =
     choice([
       const_member,
@@ -398,26 +424,6 @@ defmodule Easel.WebIDL do
     |> concat(optional_skip)
     |> ignore(string("};"))
     |> reduce(:build_interface)
-
-  defp build_interface_mixin(parts) do
-    parts = Map.new(parts)
-
-    %{
-      "type" => "interface mixin",
-      "name" => parts[:name],
-      "members" => Enum.reject(parts[:members], &(&1 == :skip))
-    }
-  end
-
-  defp build_interface(parts) do
-    parts = Map.new(parts)
-
-    %{
-      "type" => "interface",
-      "name" => parts[:name],
-      "members" => Enum.reject(parts[:members], &(&1 == :skip))
-    }
-  end
 
   # ── Skip non-interface top-level constructs ────────────────────────
 
@@ -483,6 +489,7 @@ defmodule Easel.WebIDL do
     |> eos()
 
   defparsec(:parse_document, document)
+  # parsec:Easel.WebIDL
 
   # ── Public API ─────────────────────────────────────────────────────
 

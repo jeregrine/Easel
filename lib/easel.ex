@@ -96,82 +96,382 @@ defmodule Easel do
 
   # ── Generated Canvas 2D API ──────────────────────────────────────
 
-  dir = :code.priv_dir(:easel)
+  # Generated once from priv/easel.webidl + priv/compat.json.
+  # To regenerate this section, run: mix easel.regen_canvas_api
 
-  idl =
-    File.read!("#{dir}/easel.webidl")
-    |> Easel.WebIDL.members_by_name()
-
-  %{"data" => bcd} =
-    File.read!("#{dir}/compat.json")
-    |> JSON.decode!()
-
-  @defs bcd
-        |> Enum.reject(fn {func, stuff} ->
-          func == "__compat" ||
-            stuff["__compat"]["status"]["deprecated"] != false ||
-            !Map.has_key?(idl, func)
-        end)
-        |> Enum.flat_map(fn {func, stuff} ->
-          variants = Map.fetch!(idl, func)
-          doc_url = "https://developer.mozilla.org#{stuff["__compat"]["mdn_url"]}"
-
-          case hd(variants)["type"] do
-            "attribute" ->
-              name = String.to_atom("set_" <> Macro.underscore(func))
-              [{:set, name, func, doc_url}]
-
-            "operation" ->
-              name = String.to_atom(Macro.underscore(func))
-
-              clauses =
-                variants
-                |> Enum.flat_map(fn variant ->
-                  args = variant["arguments"]
-
-                  {required, optional} =
-                    Enum.split_while(args, fn a -> !a["optional"] end)
-
-                  for i <- 0..length(optional) do
-                    (required ++ Enum.take(optional, i))
-                    |> Enum.map(fn a ->
-                      Macro.var(String.to_atom(Macro.underscore(a["name"])), __MODULE__)
-                    end)
-                  end
-                end)
-                |> Enum.uniq_by(&length/1)
-                |> Enum.sort_by(&length/1)
-
-              clauses
-              |> Enum.with_index()
-              |> Enum.map(fn {arg_vars, idx} ->
-                url = if idx == 0, do: doc_url, else: nil
-                {:call, name, func, arg_vars, url}
-              end)
-
-            _ ->
-              []
-          end
-        end)
-
-  for d <- @defs do
-    case d do
-      {:set, name, js_name, doc_url} ->
-        @doc doc_url
-        def unquote(name)(ctx, value) do
-          set(ctx, unquote(js_name), value)
-        end
-
-      {:call, name, js_name, arg_vars, doc_url} ->
-        if doc_url do
-          @doc doc_url
-        end
-
-        def unquote(name)(ctx, unquote_splicing(arg_vars)) do
-          call(ctx, unquote(js_name), unquote(arg_vars))
-        end
-    end
+  # --- BEGIN GENERATED CANVAS API ---
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/arc"
+  def arc(ctx, x, y, radius, start_angle, end_angle) do
+    call(ctx, "arc", [x, y, radius, start_angle, end_angle])
   end
+
+  def arc(ctx, x, y, radius, start_angle, end_angle, anticlockwise) do
+    call(ctx, "arc", [x, y, radius, start_angle, end_angle, anticlockwise])
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/arcTo"
+  def arc_to(ctx, x1, y1, x2, y2, radius) do
+    call(ctx, "arcTo", [x1, y1, x2, y2, radius])
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/beginPath"
+  def begin_path(ctx) do
+    call(ctx, "beginPath", [])
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/bezierCurveTo"
+  def bezier_curve_to(ctx, cp1x, cp1y, cp2x, cp2y, x, y) do
+    call(ctx, "bezierCurveTo", [cp1x, cp1y, cp2x, cp2y, x, y])
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/clearRect"
+  def clear_rect(ctx, x, y, w, h) do
+    call(ctx, "clearRect", [x, y, w, h])
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/clip"
+  def clip(ctx) do
+    call(ctx, "clip", [])
+  end
+
+  def clip(ctx, winding) do
+    call(ctx, "clip", [winding])
+  end
+
+  def clip(ctx, path, winding) do
+    call(ctx, "clip", [path, winding])
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/closePath"
+  def close_path(ctx) do
+    call(ctx, "closePath", [])
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/createImageData"
+  def create_image_data(ctx, imagedata) do
+    call(ctx, "createImageData", [imagedata])
+  end
+
+  def create_image_data(ctx, sw, sh) do
+    call(ctx, "createImageData", [sw, sh])
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/createLinearGradient"
+  def create_linear_gradient(ctx, x0, y0, x1, y1) do
+    call(ctx, "createLinearGradient", [x0, y0, x1, y1])
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/createPattern"
+  def create_pattern(ctx, image, repetition) do
+    call(ctx, "createPattern", [image, repetition])
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/createRadialGradient"
+  def create_radial_gradient(ctx, x0, y0, r0, x1, y1, r1) do
+    call(ctx, "createRadialGradient", [x0, y0, r0, x1, y1, r1])
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/drawFocusIfNeeded"
+  def draw_focus_if_needed(ctx, element) do
+    call(ctx, "drawFocusIfNeeded", [element])
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/drawImage"
+  def draw_image(ctx, image, dx, dy) do
+    call(ctx, "drawImage", [image, dx, dy])
+  end
+
+  def draw_image(ctx, image, dx, dy, dw, dh) do
+    call(ctx, "drawImage", [image, dx, dy, dw, dh])
+  end
+
+  def draw_image(ctx, image, sx, sy, sw, sh, dx, dy, dw, dh) do
+    call(ctx, "drawImage", [image, sx, sy, sw, sh, dx, dy, dw, dh])
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/ellipse"
+  def ellipse(ctx, x, y, radius_x, radius_y, rotation, start_angle, end_angle) do
+    call(ctx, "ellipse", [x, y, radius_x, radius_y, rotation, start_angle, end_angle])
+  end
+
+  def ellipse(ctx, x, y, radius_x, radius_y, rotation, start_angle, end_angle, anticlockwise) do
+    call(ctx, "ellipse", [
+      x,
+      y,
+      radius_x,
+      radius_y,
+      rotation,
+      start_angle,
+      end_angle,
+      anticlockwise
+    ])
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/fill"
+  def fill(ctx) do
+    call(ctx, "fill", [])
+  end
+
+  def fill(ctx, winding) do
+    call(ctx, "fill", [winding])
+  end
+
+  def fill(ctx, path, winding) do
+    call(ctx, "fill", [path, winding])
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/fillRect"
+  def fill_rect(ctx, x, y, w, h) do
+    call(ctx, "fillRect", [x, y, w, h])
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/fillText"
+  def fill_text(ctx, text, x, y) do
+    call(ctx, "fillText", [text, x, y])
+  end
+
+  def fill_text(ctx, text, x, y, max_width) do
+    call(ctx, "fillText", [text, x, y, max_width])
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/getImageData"
+  def get_image_data(ctx, sx, sy, sw, sh) do
+    call(ctx, "getImageData", [sx, sy, sw, sh])
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/getLineDash"
+  def get_line_dash(ctx) do
+    call(ctx, "getLineDash", [])
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/getTransform"
+  def get_transform(ctx) do
+    call(ctx, "getTransform", [])
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/isPointInPath"
+  def is_point_in_path(ctx, x, y) do
+    call(ctx, "isPointInPath", [x, y])
+  end
+
+  def is_point_in_path(ctx, x, y, winding) do
+    call(ctx, "isPointInPath", [x, y, winding])
+  end
+
+  def is_point_in_path(ctx, path, x, y, winding) do
+    call(ctx, "isPointInPath", [path, x, y, winding])
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/isPointInStroke"
+  def is_point_in_stroke(ctx, x, y) do
+    call(ctx, "isPointInStroke", [x, y])
+  end
+
+  def is_point_in_stroke(ctx, path, x, y) do
+    call(ctx, "isPointInStroke", [path, x, y])
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/lineTo"
+  def line_to(ctx, x, y) do
+    call(ctx, "lineTo", [x, y])
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/measureText"
+  def measure_text(ctx, text) do
+    call(ctx, "measureText", [text])
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/moveTo"
+  def move_to(ctx, x, y) do
+    call(ctx, "moveTo", [x, y])
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/putImageData"
+  def put_image_data(ctx, imagedata, dx, dy) do
+    call(ctx, "putImageData", [imagedata, dx, dy])
+  end
+
+  def put_image_data(ctx, imagedata, dx, dy, dirty_x, dirty_y, dirty_width, dirty_height) do
+    call(ctx, "putImageData", [imagedata, dx, dy, dirty_x, dirty_y, dirty_width, dirty_height])
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/quadraticCurveTo"
+  def quadratic_curve_to(ctx, cpx, cpy, x, y) do
+    call(ctx, "quadraticCurveTo", [cpx, cpy, x, y])
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/rect"
+  def rect(ctx, x, y, w, h) do
+    call(ctx, "rect", [x, y, w, h])
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/resetTransform"
+  def reset_transform(ctx) do
+    call(ctx, "resetTransform", [])
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/restore"
+  def restore(ctx) do
+    call(ctx, "restore", [])
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/rotate"
+  def rotate(ctx, angle) do
+    call(ctx, "rotate", [angle])
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/save"
+  def save(ctx) do
+    call(ctx, "save", [])
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/scale"
+  def scale(ctx, x, y) do
+    call(ctx, "scale", [x, y])
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/fillStyle"
+  def set_fill_style(ctx, value) do
+    set(ctx, "fillStyle", value)
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/filter"
+  def set_filter(ctx, value) do
+    set(ctx, "filter", value)
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/font"
+  def set_font(ctx, value) do
+    set(ctx, "font", value)
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/globalAlpha"
+  def set_global_alpha(ctx, value) do
+    set(ctx, "globalAlpha", value)
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/globalCompositeOperation"
+  def set_global_composite_operation(ctx, value) do
+    set(ctx, "globalCompositeOperation", value)
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/imageSmoothingEnabled"
+  def set_image_smoothing_enabled(ctx, value) do
+    set(ctx, "imageSmoothingEnabled", value)
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/lineCap"
+  def set_line_cap(ctx, value) do
+    set(ctx, "lineCap", value)
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/setLineDash"
+  def set_line_dash(ctx, segments) do
+    call(ctx, "setLineDash", [segments])
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/lineDashOffset"
+  def set_line_dash_offset(ctx, value) do
+    set(ctx, "lineDashOffset", value)
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/lineJoin"
+  def set_line_join(ctx, value) do
+    set(ctx, "lineJoin", value)
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/lineWidth"
+  def set_line_width(ctx, value) do
+    set(ctx, "lineWidth", value)
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/miterLimit"
+  def set_miter_limit(ctx, value) do
+    set(ctx, "miterLimit", value)
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/shadowBlur"
+  def set_shadow_blur(ctx, value) do
+    set(ctx, "shadowBlur", value)
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/shadowColor"
+  def set_shadow_color(ctx, value) do
+    set(ctx, "shadowColor", value)
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/shadowOffsetX"
+  def set_shadow_offset_x(ctx, value) do
+    set(ctx, "shadowOffsetX", value)
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/shadowOffsetY"
+  def set_shadow_offset_y(ctx, value) do
+    set(ctx, "shadowOffsetY", value)
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/strokeStyle"
+  def set_stroke_style(ctx, value) do
+    set(ctx, "strokeStyle", value)
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/textAlign"
+  def set_text_align(ctx, value) do
+    set(ctx, "textAlign", value)
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/textBaseline"
+  def set_text_baseline(ctx, value) do
+    set(ctx, "textBaseline", value)
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/setTransform"
+  def set_transform(ctx) do
+    call(ctx, "setTransform", [])
+  end
+
+  def set_transform(ctx, transform) do
+    call(ctx, "setTransform", [transform])
+  end
+
+  def set_transform(ctx, a, b, c, d, e, f) do
+    call(ctx, "setTransform", [a, b, c, d, e, f])
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/stroke"
+  def stroke(ctx) do
+    call(ctx, "stroke", [])
+  end
+
+  def stroke(ctx, path) do
+    call(ctx, "stroke", [path])
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/strokeRect"
+  def stroke_rect(ctx, x, y, w, h) do
+    call(ctx, "strokeRect", [x, y, w, h])
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/strokeText"
+  def stroke_text(ctx, text, x, y) do
+    call(ctx, "strokeText", [text, x, y])
+  end
+
+  def stroke_text(ctx, text, x, y, max_width) do
+    call(ctx, "strokeText", [text, x, y, max_width])
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/transform"
+  def transform(ctx, a, b, c, d, e, f) do
+    call(ctx, "transform", [a, b, c, d, e, f])
+  end
+
+  @doc "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/translate"
+  def translate(ctx, x, y) do
+    call(ctx, "translate", [x, y])
+  end
+
+  # --- END GENERATED CANVAS API ---
 
   # ── Templates and Instances ──────────────────────────────────────
 

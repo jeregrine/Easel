@@ -1,7 +1,7 @@
 defmodule Easel.MixProject do
   use Mix.Project
 
-  @version "0.3.0"
+  @version "0.3.1"
   @source_url "https://github.com/jasonstiebs/easel"
 
   def project do
@@ -11,6 +11,7 @@ defmodule Easel.MixProject do
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
+      aliases: aliases(),
       test_paths: ["test"],
       test_pattern: "*_test.exs",
       description: description(),
@@ -31,11 +32,19 @@ defmodule Easel.MixProject do
 
   defp deps do
     [
-      {:nimble_parsec, "~> 1.0"},
       {:phoenix_live_view, "~> 1.0", optional: true},
       {:termite, "~> 0.4.0", optional: true},
-      {:benchee, "~> 1.0", only: :test},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false}
+    ]
+  end
+
+  defp aliases do
+    [
+      "easel.regen_canvas_api": [
+        "cmd elixir scripts/regenerate_canvas_api.exs",
+        "format lib/easel.ex lib/web_idl.ex.exs"
+      ],
+      "easel.regen_web_idl_parser": ["easel.regen_canvas_api"]
     ]
   end
 

@@ -444,7 +444,7 @@ Add `easel` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:easel, "~> 0.3.0"},
+    {:easel, "~> 0.3.1"},
     # optional, for LiveView support
     {:phoenix_live_view, "~> 1.0"},
     # optional, for Easel.Terminal
@@ -460,3 +460,16 @@ mix deps.get
 ```
 
 Documentation is available on [HexDocs](https://hexdocs.pm/easel).
+
+## Regenerating Canvas API wrappers (for contributors)
+
+`Easel` ships with generated Canvas2D wrapper functions directly in `lib/easel.ex`.
+
+If `priv/easel.webidl` or `priv/compat.json` changes, regenerate wrappers with:
+
+```bash
+mix easel.regen_canvas_api
+```
+
+This uses a script-local NimbleParsec parser template (`lib/web_idl.ex.exs`) and does
+not require NimbleParsec as a runtime dependency of the library.
