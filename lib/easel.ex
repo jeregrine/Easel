@@ -50,6 +50,7 @@ defmodule Easel do
 
     * `Easel.LiveView` - Phoenix LiveView component with colocated JS hook
     * `Easel.WX` - Native desktop window via Erlang's `:wx` (wxWidgets)
+    * `Easel.Terminal` - Experimental terminal renderer (wx off-screen raster + ASCII)
     * Custom - consume `canvas.ops` directly in your own renderer
   """
 

@@ -5,13 +5,14 @@
 
 Easel allows you to interact and draw on a canvas. The API is a `snake_cased` version of the [CanvasRenderingContext2D](https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D) with the addition of `set` and `call` if you need to set a property or call a function not yet supported.
 
-The idea is you create a canvas, apply the draw operations to it then send it off to the Browser or Wx to render. This allows us to use Elixir to draw basically anything, further it comes with the following features:
+The idea is you create a canvas, apply the draw operations to it then send it off to the Browser, Wx, or terminal backend to render. This allows us to use Elixir to draw basically anything, further it comes with the following features:
 
 - Optional Phoenix LiveView components and hooks are available.
   - With support for layers.
   - Animations and Event handling
   - And templating and instancing of drawing, so you don't have to send all the draw commands on every frame, just the values that have changed.
 - Optional Wx Rendering for local art and speed using the same Canvas API!.
+- Experimental terminal rendering (`Easel.Terminal`) using wx off-screen rasterization + ASCII conversion.
 
 ## Example
 
@@ -32,7 +33,8 @@ And render it
 Easel.render(canvas)
 ```
 
-This basically just reverse the ops list and marks it as rendered. If you want to make a picture you will need a fe
+This reverses the ops list and marks it as rendered. To actually display it, send
+it to a backend such as LiveView, wx, or `Easel.Terminal`.
 
 ## Phoenix LiveView
 
@@ -286,7 +288,11 @@ This repo has two main example styles:
 - **wx/native examples** using `Easel.WX`
   - Use the same Easel Canvas API, but render to a native wx window instead of the browser
   - Includes both static renders and animated examples
-  - Standalone scripts live under `examples/*.exs` (for example boids and other sketches)
+  - Standalone scripts live under `examples/wx/*.exs` (for example boids)
+
+- **terminal examples** using `Easel.Terminal`
+  - Experimental terminal rendering and animation scripts
+  - Standalone scripts live under `examples/term/*.exs`
 
 Run the Phoenix demo locally:
 
@@ -382,6 +388,55 @@ Erlang must be compiled with wxWidgets support. If you use [mise](https://mise.j
 > **Note:** If you update wxWidgets (e.g. via `brew upgrade`), you'll need to
 > rebuild Erlang with `mise install erlang --force` so it links against the new version.
 
+## Terminal Backend (Experimental)
+
+`Easel.Terminal` renders Easel canvases in a terminal by:
+
+1. Rasterizing off-screen with `Easel.WX.rasterize/2`
+2. Extracting color silhouettes and fitting printable ASCII glyph masks per cell
+3. Writing frames through `termite`
+
+Because it currently relies on wx for rasterization, it has the same wx runtime
+requirement as `Easel.WX`.
+
+It also requires an interactive TTY (run from a real terminal session).
+
+```elixir
+canvas =
+  Easel.new(120, 80)
+  |> Easel.set_fill_style("black")
+  |> Easel.fill_rect(0, 0, 120, 80)
+  |> Easel.set_fill_style("white")
+  |> Easel.set_font("bold 24px monospace")
+  |> Easel.fill_text("Easel", 20, 45)
+
+Easel.Terminal.render(canvas, color: :ansi256, dpr: 2.0, samples: 3)
+# press q to quit
+```
+
+Animation API mirrors `Easel.WX.animate/5`:
+
+```elixir
+Easel.Terminal.animate(120, 80, state, fn state ->
+  {canvas, next_state} = tick(state)
+  {canvas, next_state}
+end, fps: 30, color: :ansi256)
+```
+
+Press `q` (or Ctrl+C) to stop.
+
+Tip: `dpr` and `samples` help a lot with text/edge quality.
+
+By default, `Easel.Terminal` auto-selects characters using silhouette fitting,
+caches mask→glyph matches during a render/animation run (`char_cache: true`),
+and can adapt color luma to terminal theme (`theme: :auto`, `auto_contrast: true`) when needed.
+You can tune cache size with `char_cache_size:`.
+
+For faster animation, reduce silhouette cell resolution with `glyph_width:` /
+`glyph_height:`.
+
+If you want the old density-ramp mode, pass a manual `charset:` string.
+
 ## Installation
 
 Add `easel` to your list of dependencies in `mix.exs`:
@@ -391,7 +446,9 @@ def deps do
   [
     {:easel, "~> 0.2.2"},
     # optional, for LiveView support
-    {:phoenix_live_view, "~> 1.0"}
+    {:phoenix_live_view, "~> 1.0"},
+    # optional, for Easel.Terminal
+    {:termite, "~> 0.4.0"}
   ]
 end
 ```

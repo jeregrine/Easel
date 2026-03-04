@@ -1,6 +1,5 @@
 # Piet Mondrian–style generative art
-# Run: mix run examples/mondrian.exs
-
+# Run: mix run examples/wx/mondrian.exs
 
 width = 500
 height = 500

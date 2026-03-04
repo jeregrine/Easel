@@ -1,8 +1,8 @@
 # Boids flocking simulation
-# Run: mix run examples/boids.exs
+# Run: mix run examples/term/boids.exs
 #
-# Uses Easel.WX.animate/5 to run in a native window when wx is available.
-# Falls back to a headless simulation otherwise.
+# Uses Easel.Terminal.animate/5 to run in the terminal.
+# Press q (or Ctrl+C) to quit.
 
 defmodule Boids do
   @width 800
@@ -171,7 +171,7 @@ defmodule Boids do
       acc =
         Enum.reduce(group, acc, fn boid, acc ->
           angle = :math.atan2(boid.vy, boid.vx)
-          size = 6
+          size = 9
 
           x1 = boid.x + :math.cos(angle) * size * 2
           y1 = boid.y + :math.sin(angle) * size * 2
@@ -212,8 +212,8 @@ end
 :rand.seed(:exsss, {42, 42, 42})
 boids = Boids.init()
 
-if Code.ensure_loaded?(Easel.WX) and Easel.WX.available?() do
-  Easel.WX.animate(
+if Easel.Terminal.available?() do
+  Easel.Terminal.animate(
     Boids.width(),
     Boids.height(),
     boids,
@@ -221,23 +221,18 @@ if Code.ensure_loaded?(Easel.WX) and Easel.WX.available?() do
       next = Boids.tick(boids)
       {Boids.render(next), next}
     end,
-    title: "Boids — click to add",
-    interval: 16,
-    on_click: fn x, y, boids -> Boids.add_boids(boids, x, y) end
+    title: "Boids",
+    fps: 24,
+    color: :ansi256,
+    dpr: 1.5,
+    samples: 2,
+    glyph_width: 6,
+    glyph_height: 12,
+    background_threshold: 0.1,
+    fit: :contain,
+    char_cache_size: 20_000
   )
 else
-  IO.puts("wx not available — simulating 60 frames...")
-
-  Enum.reduce(1..60, boids, fn frame, boids ->
-    next = Boids.tick(boids)
-    canvas = Boids.render(next) |> Easel.render()
-
-    if rem(frame, 10) == 0 do
-      IO.puts("Frame #{frame}: #{length(canvas.ops)} ops")
-    end
-
-    next
-  end)
-
-  IO.puts("Done. Pipe to Easel.WX.animate/5 when wx is available.")
+  IO.puts("Easel.Terminal is unavailable.")
+  IO.puts("It currently requires wx support, {:termite, \"~> 0.4.0\"}, and an interactive TTY.")
 end

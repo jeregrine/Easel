@@ -1,6 +1,5 @@
 # Recursive fractal tree
-# Run: mix run examples/tree.exs
-
+# Run: mix run examples/term/tree.exs
 
 width = 600
 height = 500
@@ -68,8 +67,15 @@ canvas =
   Tree.draw(canvas, width / 2, height - 40, 100, -:math.pi() / 2, 0, 10)
   |> Easel.render()
 
-if Code.ensure_loaded?(Easel.WX) and Easel.WX.available?() do
-  Easel.WX.render(canvas, title: "Fractal Tree")
+if Easel.Terminal.available?() do
+  Easel.Terminal.render(canvas,
+    title: "Fractal Tree",
+    color: :ansi256,
+    dpr: 2.0,
+    samples: 2,
+    fit: :contain
+  )
 else
-  IO.puts("Fractal tree: #{length(canvas.ops)} operations")
+  IO.puts("Easel.Terminal is unavailable.")
+  IO.puts("It currently requires wx support, {:termite, \"~> 0.4.0\"}, and an interactive TTY.")
 end

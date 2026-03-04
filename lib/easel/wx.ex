@@ -356,7 +356,7 @@ defmodule Easel.WX do
       * `:on_key_down` - `fn key_event -> ... end` called on key press
     """
     def render(%Easel{} = canvas, opts \\ []) do
-      canvas = Easel.render(canvas)
+      canvas = prepare_canvas(canvas)
       title = Keyword.get(opts, :title, "Easel")
       width = canvas.width || 400
       height = canvas.height || 300
@@ -430,6 +430,87 @@ defmodule Easel.WX do
 
       receive do
         {:DOWN, ^ref, :process, ^pid, _reason} -> :ok
+      end
+    end
+
+    @doc """
+    Rasterizes a canvas off-screen and returns raw RGB pixel data.
+
+    Useful for experimental non-window renderers (for example terminal/ASCII).
+
+    Returns `%{width: w, height: h, rgb: binary}` where `rgb` is row-major
+    24-bit color (`<<r, g, b, ...>>`).
+
+    ## Options
+
+      * `:width` - logical canvas width (default `canvas.width || 400`)
+      * `:height` - logical canvas height (default `canvas.height || 300`)
+      * `:dpr` - device pixel ratio multiplier (default `1.0`)
+    """
+    def rasterize(%Easel{} = canvas, opts \\ []) do
+      canvas = prepare_canvas(canvas)
+
+      width =
+        opts
+        |> Keyword.get(:width, canvas.width || 400)
+        |> to_float()
+        |> round()
+        |> max(1)
+
+      height =
+        opts
+        |> Keyword.get(:height, canvas.height || 300)
+        |> to_float()
+        |> round()
+        |> max(1)
+
+      dpr =
+        opts
+        |> Keyword.get(:dpr, 1.0)
+        |> to_float()
+        |> max(0.01)
+
+      pixel_width = max(round(width * dpr), 1)
+      pixel_height = max(round(height * dpr), 1)
+
+      created_wx_env? = ensure_wx_env()
+
+      try do
+        bitmap = :wxBitmap.new(pixel_width, pixel_height)
+
+        try do
+          bitmap_dc = :wxMemoryDC.new(bitmap)
+
+          try do
+            :wxMemoryDC.setBackground(bitmap_dc, :wxBrush.new({255, 255, 255, 255}))
+            :wxMemoryDC.clear(bitmap_dc)
+
+            gc = :wxGraphicsContext.create(bitmap_dc)
+
+            try do
+              :wxGraphicsContext.scale(gc, dpr, dpr)
+
+              canvas.ops
+              |> Enum.reduce(initial_draw_state(gc, width, height), &execute_op/2)
+
+              image = :wxBitmap.convertToImage(bitmap)
+
+              try do
+                %{width: pixel_width, height: pixel_height, rgb: :wxImage.getData(image)}
+              after
+                :wxImage.destroy(image)
+              end
+            after
+              :wxGraphicsContext.destroy(gc)
+            end
+          after
+            :wxMemoryDC.destroy(bitmap_dc)
+          end
+        after
+          :wxBitmap.destroy(bitmap)
+        end
+      after
+        if created_wx_env?, do: :wx.destroy()
       end
     end
 
@@ -587,7 +668,7 @@ defmodule Easel.WX do
     @impl true
     def handle_info(:tick, state) do
       {canvas, new_animate_state} = state.animate_fn.(state.animate_state)
-      canvas = Easel.render(canvas)
+      canvas = prepare_canvas(canvas)
       new_state = %{state | ops: canvas.ops, animate_state: new_animate_state}
 
       :wxFrame.refresh(state.frame, eraseBackground: false)
@@ -695,29 +776,7 @@ defmodule Easel.WX do
       gc = :wxGraphicsContext.create(bitmap_dc)
       :wxGraphicsContext.scale(gc, dpr, dpr)
 
-      draw_state = %{
-        gc: gc,
-        width: width,
-        height: height,
-        path: nil,
-        fill_style: {0, 0, 0, 255},
-        stroke_style: {0, 0, 0, 255},
-        line_width: 1.0,
-        line_cap: :wxCAP_BUTT,
-        line_join: :wxJOIN_MITER,
-        font_size: 10,
-        font_face: ~c"sans-serif",
-        font_style: :wxFONTSTYLE_NORMAL,
-        font_weight: :wxFONTWEIGHT_NORMAL,
-        global_alpha: 1.0,
-        text_align: :start,
-        text_baseline: :alphabetic,
-        saved: [],
-        miter_limit: 10.0,
-        line_dash: []
-      }
-
-      Enum.reduce(ops, draw_state, &execute_op/2)
+      Enum.reduce(ops, initial_draw_state(gc, width, height), &execute_op/2)
 
       # GC must be destroyed to flush drawing to the bitmap DC before blit
       :wxGraphicsContext.destroy(gc)
@@ -1184,6 +1243,47 @@ defmodule Easel.WX do
 
     # ── Helpers ─────────────────────────────────────────────────────
 
+    defp prepare_canvas(%Easel{} = canvas) do
+      canvas
+      |> Easel.render()
+      |> Easel.expand()
+    end
+
+    defp ensure_wx_env do
+      try do
+        _ = :wx.get_env()
+        false
+      rescue
+        _ ->
+          :wx.new(silent_start: true)
+          true
+      end
+    end
+
+    defp initial_draw_state(gc, width, height) do
+      %{
+        gc: gc,
+        width: width,
+        height: height,
+        path: nil,
+        fill_style: {0, 0, 0, 255},
+        stroke_style: {0, 0, 0, 255},
+        line_width: 1.0,
+        line_cap: :wxCAP_BUTT,
+        line_join: :wxJOIN_MITER,
+        font_size: 10,
+        font_face: ~c"sans-serif",
+        font_style: :wxFONTSTYLE_NORMAL,
+        font_weight: :wxFONTWEIGHT_NORMAL,
+        global_alpha: 1.0,
+        text_align: :start,
+        text_baseline: :alphabetic,
+        saved: [],
+        miter_limit: 10.0,
+        line_dash: []
+      }
+    end
+
     defp ensure_path(%{path: nil, gc: gc} = state) do
       %{state | path: :wxGraphicsContext.createPath(gc)}
     end
@@ -1252,6 +1352,15 @@ defmodule Easel.WX do
     Requires Erlang compiled with wx support. See the README for setup instructions.
     """
     def animate(_width, _height, _state, _fun, _opts \\ []) do
+      raise "Easel.WX requires Erlang compiled with wx support. See the README for setup instructions."
+    end
+
+    @doc """
+    Rasterizes a canvas to raw RGB pixels off-screen.
+
+    Requires Erlang compiled with wx support. See the README for setup instructions.
+    """
+    def rasterize(%Easel{} = _canvas, _opts \\ []) do
       raise "Easel.WX requires Erlang compiled with wx support. See the README for setup instructions."
     end
   end

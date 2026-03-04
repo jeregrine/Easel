@@ -1,6 +1,5 @@
 # Mandelbrot set rendered pixel-by-pixel
-# Run: mix run examples/mandelbrot.exs
-
+# Run: mix run examples/term/mandelbrot.exs
 
 width = 200
 height = 200
@@ -60,8 +59,15 @@ canvas =
   end)
   |> Easel.render()
 
-if Code.ensure_loaded?(Easel.WX) and Easel.WX.available?() do
-  Easel.WX.render(canvas, title: "Mandelbrot")
+if Easel.Terminal.available?() do
+  Easel.Terminal.render(canvas,
+    title: "Mandelbrot",
+    color: :ansi256,
+    dpr: 2.0,
+    samples: 2,
+    fit: :contain
+  )
 else
-  IO.puts("Mandelbrot (#{width}x#{height}, max_iter=#{max_iter}): #{length(canvas.ops)} operations")
+  IO.puts("Easel.Terminal is unavailable.")
+  IO.puts("It currently requires wx support, {:termite, \"~> 0.4.0\"}, and an interactive TTY.")
 end

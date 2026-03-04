@@ -1,6 +1,5 @@
 # Smiley face
-# Run: mix run examples/smiley.exs
-
+# Run: mix run examples/term/smiley.exs
 
 canvas =
   Easel.new(300, 300)
@@ -30,8 +29,15 @@ canvas =
   |> Easel.stroke()
   |> Easel.render()
 
-if Code.ensure_loaded?(Easel.WX) and Easel.WX.available?() do
-  Easel.WX.render(canvas, title: "Smiley")
+if Easel.Terminal.available?() do
+  Easel.Terminal.render(canvas,
+    title: "Smiley",
+    color: :ansi256,
+    dpr: 2.0,
+    samples: 2,
+    fit: :contain
+  )
 else
-  IO.puts("Smiley: #{length(canvas.ops)} operations")
+  IO.puts("Easel.Terminal is unavailable.")
+  IO.puts("It currently requires wx support, {:termite, \"~> 0.4.0\"}, and an interactive TTY.")
 end

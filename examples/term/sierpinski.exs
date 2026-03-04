@@ -1,6 +1,5 @@
 # Sierpinski triangle fractal
-# Run: mix run examples/sierpinski.exs
-
+# Run: mix run examples/term/sierpinski.exs
 
 width = 600
 height = 520
@@ -57,8 +56,15 @@ canvas =
   |> Sierpinski.triangle(ax, ay, bx, by, cx, cy, depth)
   |> Easel.render()
 
-if Code.ensure_loaded?(Easel.WX) and Easel.WX.available?() do
-  Easel.WX.render(canvas, title: "Sierpinski Triangle")
+if Easel.Terminal.available?() do
+  Easel.Terminal.render(canvas,
+    title: "Sierpinski Triangle",
+    color: :ansi256,
+    dpr: 2.0,
+    samples: 2,
+    fit: :contain
+  )
 else
-  IO.puts("Sierpinski triangle (depth #{depth}): #{length(canvas.ops)} operations")
+  IO.puts("Easel.Terminal is unavailable.")
+  IO.puts("It currently requires wx support, {:termite, \"~> 0.4.0\"}, and an interactive TTY.")
 end

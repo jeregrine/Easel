@@ -1,6 +1,5 @@
 # Bar chart — Elixir popularity by year (fictional data)
-# Run: mix run examples/chart.exs
-
+# Run: mix run examples/wx/chart.exs
 
 width = 600
 height = 400

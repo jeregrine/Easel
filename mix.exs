@@ -33,6 +33,7 @@ defmodule Easel.MixProject do
     [
       {:nimble_parsec, "~> 1.0"},
       {:phoenix_live_view, "~> 1.0", optional: true},
+      {:termite, "~> 0.4.0", optional: true},
       {:benchee, "~> 1.0", only: :test},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false}
     ]
@@ -41,7 +42,7 @@ defmodule Easel.MixProject do
   defp description do
     """
     Canvas 2D API for Elixir. Build draw operations as data, render to
-    Phoenix LiveView, native wx windows, or your own backend.
+    Phoenix LiveView, native wx windows, terminal (experimental), or your own backend.
     """
   end
 

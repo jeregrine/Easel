@@ -1,7 +1,6 @@
 # Animated analog clock
-# Run: mix run examples/clock.exs
+# Run: mix run examples/wx/clock.exs
 # (Must use `mix run`, not `elixir`, to load project modules)
-
 
 size = 400
 cx = size / 2
@@ -82,8 +81,14 @@ defmodule Clock do
 
         acc
         |> Easel.begin_path()
-        |> Easel.move_to(cx + (radius - 15) * :math.cos(angle), cy + (radius - 15) * :math.sin(angle))
-        |> Easel.line_to(cx + (radius - 12) * :math.cos(angle), cy + (radius - 12) * :math.sin(angle))
+        |> Easel.move_to(
+          cx + (radius - 15) * :math.cos(angle),
+          cy + (radius - 15) * :math.sin(angle)
+        )
+        |> Easel.line_to(
+          cx + (radius - 12) * :math.cos(angle),
+          cy + (radius - 12) * :math.sin(angle)
+        )
         |> Easel.set_stroke_style("rgba(160, 160, 176, 0.5)")
         |> Easel.set_line_width(0.5)
         |> Easel.stroke()
@@ -155,10 +160,14 @@ defmodule Clock do
 end
 
 if Code.ensure_loaded?(Easel.WX) and Easel.WX.available?() do
-  Easel.WX.animate(size, size, nil, fn _state ->
-    canvas = Clock.render(size, cx, cy, radius)
-    {canvas, nil}
-  end, title: "Clock", interval: 1000)
+  Easel.WX.animate(
+    size,
+    size,
+    nil,
+    fn _state ->
+      canvas = Clock.render(size, cx, cy, radius)
+      {canvas, nil}
+    end, title: "Clock", interval: 1000)
 else
   canvas = Clock.render(size, cx, cy, radius) |> Easel.render()
   IO.puts("Clock at #{Time.utc_now()}: #{length(canvas.ops)} operations")
