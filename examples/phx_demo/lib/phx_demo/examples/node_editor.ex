@@ -10,6 +10,7 @@ defmodule PhxDemo.Examples.NodeEditor do
   @port_x_pad 10
   @port_radius 5
   @port_hit_radius 9
+  @port_hover_radius 18
 
   @grid 32
 
@@ -75,7 +76,8 @@ defmodule PhxDemo.Examples.NodeEditor do
       ],
       selected: :set_color,
       dragging: nil,
-      pending_link: nil
+      pending_link: nil,
+      pointer: nil
     }
   end
 
@@ -88,7 +90,10 @@ defmodule PhxDemo.Examples.NodeEditor do
 
   def pending_output_label(%{pending_link: nil}), do: nil
 
-  def pending_output_label(%{pending_link: %{from: {node_id, out_idx}}, nodes: nodes}) do
+  def pending_output_label(%{
+        pending_link: %{dragging_endpoint: :to, from: {node_id, out_idx}},
+        nodes: nodes
+      }) do
     with %{title: title, outputs: outputs} <- Enum.find(nodes, &(&1.id == node_id)),
          label when is_binary(label) <- Enum.at(outputs, out_idx) do
       "#{title}.#{label}"
@@ -97,24 +102,64 @@ defmodule PhxDemo.Examples.NodeEditor do
     end
   end
 
+  def pending_output_label(_), do: nil
+
   def mouse_down(state, x, y) do
     case port_hit(state.nodes, x, y) do
       {:output, node, out_idx, label} ->
         nodes = bring_to_front(state.nodes, node.id)
 
-        %{
-          state
-          | nodes: nodes,
-            selected: node.id,
-            dragging: nil,
-            pending_link: %{from: {node.id, out_idx}, color: wire_color(label)}
-        }
+        case state.pending_link do
+          %{dragging_endpoint: :from, to: {to_id, to_idx}, color: color} when to_id != node.id ->
+            link = %{from: {node.id, out_idx}, to: {to_id, to_idx}, color: color}
+
+            %{
+              state
+              | nodes: nodes,
+                selected: node.id,
+                dragging: nil,
+                pending_link: nil,
+                pointer: %{x: x, y: y},
+                links: upsert_link(state.links, link)
+            }
+
+          _ ->
+            {detached, links} = pop_link_from_output(state.links, node.id, out_idx)
+
+            pending_link =
+              if detached do
+                %{
+                  dragging_endpoint: :from,
+                  from: nil,
+                  to: detached.to,
+                  color: detached.color
+                }
+              else
+                %{
+                  dragging_endpoint: :to,
+                  from: {node.id, out_idx},
+                  to: nil,
+                  color: wire_color(label)
+                }
+              end
+
+            %{
+              state
+              | nodes: nodes,
+                selected: node.id,
+                dragging: nil,
+                pending_link: pending_link,
+                pointer: %{x: x, y: y},
+                links: links
+            }
+        end
 
       {:input, node, in_idx, _label} ->
         nodes = bring_to_front(state.nodes, node.id)
 
         case state.pending_link do
-          %{from: {from_id, out_idx}, color: color} when from_id != node.id ->
+          %{dragging_endpoint: :to, from: {from_id, out_idx}, color: color}
+          when from_id != node.id ->
             link = %{from: {from_id, out_idx}, to: {node.id, in_idx}, color: color}
 
             %{
@@ -123,22 +168,49 @@ defmodule PhxDemo.Examples.NodeEditor do
                 selected: node.id,
                 dragging: nil,
                 pending_link: nil,
+                pointer: %{x: x, y: y},
                 links: upsert_link(state.links, link)
             }
 
           _ ->
-            %{state | nodes: nodes, selected: node.id, dragging: nil, pending_link: nil}
+            {detached, links} = pop_link_from_input(state.links, node.id, in_idx)
+
+            pending_link =
+              if detached do
+                %{
+                  dragging_endpoint: :to,
+                  from: detached.from,
+                  to: nil,
+                  color: detached.color
+                }
+              else
+                nil
+              end
+
+            %{
+              state
+              | nodes: nodes,
+                selected: node.id,
+                dragging: nil,
+                pending_link: pending_link,
+                pointer: %{x: x, y: y},
+                links: links
+            }
         end
 
       nil ->
-        start_drag(state, x, y)
+        if state.pending_link do
+          %{state | selected: nil, dragging: nil, pending_link: nil, pointer: %{x: x, y: y}}
+        else
+          start_drag(state, x, y)
+        end
     end
   end
 
   def start_drag(state, x, y) do
     case node_at(state.nodes, x, y) do
       nil ->
-        %{state | selected: nil, dragging: nil, pending_link: nil}
+        %{state | selected: nil, dragging: nil, pending_link: nil, pointer: %{x: x, y: y}}
 
       node ->
         nodes = bring_to_front(state.nodes, node.id)
@@ -147,14 +219,17 @@ defmodule PhxDemo.Examples.NodeEditor do
           state
           | nodes: nodes,
             selected: node.id,
-            dragging: %{id: node.id, dx: x - node.x, dy: y - node.y}
+            dragging: %{id: node.id, dx: x - node.x, dy: y - node.y},
+            pointer: %{x: x, y: y}
         }
     end
   end
 
-  def drag(%{dragging: nil} = state, _x, _y), do: state
+  def drag(%{dragging: nil} = state, x, y), do: %{state | pointer: %{x: x, y: y}}
 
   def drag(%{dragging: %{id: id, dx: dx, dy: dy}} = state, x, y) do
+    state = %{state | pointer: %{x: x, y: y}}
+
     update_node(state, id, fn node ->
       h = node_height(node)
       nx = clamp(x - dx, 12, @width - @node_w - 12)
@@ -225,6 +300,7 @@ defmodule PhxDemo.Examples.NodeEditor do
   def render(state, template_opts) do
     nodes_by_id = Map.new(state.nodes, &{&1.id, &1})
     pending_from = state.pending_link && state.pending_link.from
+    hovered_port = hover_attach_target(state.nodes, state.pending_link, state.pointer)
 
     state.links
     |> Enum.reduce(
@@ -237,9 +313,10 @@ defmodule PhxDemo.Examples.NodeEditor do
     )
     |> then(fn canvas ->
       Enum.reduce(state.nodes, canvas, fn node, acc ->
-        draw_node(acc, node, state.selected == node.id, pending_from)
+        draw_node(acc, node, state.selected == node.id, pending_from, hovered_port)
       end)
     end)
+    |> maybe_draw_pending_link(nodes_by_id, state.pending_link, state.pointer)
     |> Easel.render()
   end
 
@@ -283,27 +360,62 @@ defmodule PhxDemo.Examples.NodeEditor do
          to_node when not is_nil(to_node) <- Map.get(nodes_by_id, to_id) do
       {x1, y1} = output_port(from_node, out_idx)
       {x2, y2} = input_port(to_node, in_idx)
-      bend = max(48.0, abs(x2 - x1) * 0.55)
-
-      canvas
-      |> Easel.begin_path()
-      |> Easel.move_to(x1, y1)
-      |> Easel.bezier_curve_to(x1 + bend, y1, x2 - bend, y2, x2, y2)
-      |> Easel.set_stroke_style("rgba(15, 23, 42, 0.85)")
-      |> Easel.set_line_width(5)
-      |> Easel.stroke()
-      |> Easel.begin_path()
-      |> Easel.move_to(x1, y1)
-      |> Easel.bezier_curve_to(x1 + bend, y1, x2 - bend, y2, x2, y2)
-      |> Easel.set_stroke_style(color)
-      |> Easel.set_line_width(2.4)
-      |> Easel.stroke()
+      draw_wire(canvas, x1, y1, x2, y2, color)
     else
       _ -> canvas
     end
   end
 
-  defp draw_node(canvas, node, selected?, pending_from) do
+  defp maybe_draw_pending_link(canvas, _nodes_by_id, nil, _pointer), do: canvas
+  defp maybe_draw_pending_link(canvas, _nodes_by_id, _pending_link, nil), do: canvas
+
+  defp maybe_draw_pending_link(
+         canvas,
+         nodes_by_id,
+         %{dragging_endpoint: :to, from: {from_id, out_idx}, color: color},
+         %{x: x, y: y}
+       ) do
+    with from_node when not is_nil(from_node) <- Map.get(nodes_by_id, from_id) do
+      {x1, y1} = output_port(from_node, out_idx)
+      draw_wire(canvas, x1, y1, x, y, color)
+    else
+      _ -> canvas
+    end
+  end
+
+  defp maybe_draw_pending_link(
+         canvas,
+         nodes_by_id,
+         %{dragging_endpoint: :from, to: {to_id, in_idx}, color: color},
+         %{x: x, y: y}
+       ) do
+    with to_node when not is_nil(to_node) <- Map.get(nodes_by_id, to_id) do
+      {x2, y2} = input_port(to_node, in_idx)
+      draw_wire(canvas, x, y, x2, y2, color)
+    else
+      _ -> canvas
+    end
+  end
+
+  defp draw_wire(canvas, x1, y1, x2, y2, color) do
+    bend = max(48.0, abs(x2 - x1) * 0.55)
+
+    canvas
+    |> Easel.begin_path()
+    |> Easel.move_to(x1, y1)
+    |> Easel.bezier_curve_to(x1 + bend, y1, x2 - bend, y2, x2, y2)
+    |> Easel.set_stroke_style("rgba(15, 23, 42, 0.85)")
+    |> Easel.set_line_width(5)
+    |> Easel.stroke()
+    |> Easel.begin_path()
+    |> Easel.move_to(x1, y1)
+    |> Easel.bezier_curve_to(x1 + bend, y1, x2 - bend, y2, x2, y2)
+    |> Easel.set_stroke_style(color)
+    |> Easel.set_line_width(2.4)
+    |> Easel.stroke()
+  end
+
+  defp draw_node(canvas, node, selected?, pending_from, hovered_port) do
     h = node_height(node)
 
     canvas =
@@ -326,7 +438,7 @@ defmodule PhxDemo.Examples.NodeEditor do
       |> Enum.with_index()
       |> Enum.map(fn {label, idx} ->
         {px, py} = input_port(node, idx)
-        %{label: label, px: px, py: py}
+        %{label: label, idx: idx, px: px, py: py}
       end)
 
     output_rows =
@@ -342,7 +454,15 @@ defmodule PhxDemo.Examples.NodeEditor do
         Enum.map(output_rows, fn row -> %{x: row.px, y: row.py, fill: pin_color(row.label)} end)
 
     active_instances =
-      for row <- output_rows, pending_from == {node.id, row.idx}, do: %{x: row.px, y: row.py}
+      for(row <- output_rows, pending_from == {node.id, row.idx}, do: %{x: row.px, y: row.py}) ++
+        for(
+          row <- output_rows,
+          hovered_port == {:output, node.id, row.idx},
+          do: %{x: row.px, y: row.py}
+        ) ++
+        for row <- input_rows,
+            hovered_port == {:input, node.id, row.idx},
+            do: %{x: row.px, y: row.py}
 
     canvas =
       canvas
@@ -442,10 +562,86 @@ defmodule PhxDemo.Examples.NodeEditor do
     dx * dx + dy * dy <= @port_hit_radius * @port_hit_radius
   end
 
+  defp hover_attach_target(_nodes, nil, _pointer), do: nil
+  defp hover_attach_target(_nodes, _pending_link, nil), do: nil
+
+  defp hover_attach_target(nodes, %{dragging_endpoint: :to, from: {from_id, _out_idx}}, %{
+         x: x,
+         y: y
+       }) do
+    candidates =
+      for node <- nodes,
+          node.id != from_id,
+          {_label, idx} <- Enum.with_index(node.inputs) do
+        {px, py} = input_port(node, idx)
+        {:input, node.id, idx, px, py}
+      end
+
+    nearest_port(candidates, x, y)
+  end
+
+  defp hover_attach_target(nodes, %{dragging_endpoint: :from, to: {to_id, _in_idx}}, %{x: x, y: y}) do
+    candidates =
+      for node <- nodes,
+          node.id != to_id,
+          {_label, idx} <- Enum.with_index(node.outputs) do
+        {px, py} = output_port(node, idx)
+        {:output, node.id, idx, px, py}
+      end
+
+    nearest_port(candidates, x, y)
+  end
+
+  defp hover_attach_target(_nodes, _pending_link, _pointer), do: nil
+
+  defp nearest_port(candidates, x, y) do
+    hover_radius_sq = @port_hover_radius * @port_hover_radius
+
+    candidates
+    |> Enum.reduce(nil, fn {kind, node_id, idx, px, py}, best ->
+      dx = x - px
+      dy = y - py
+      dist_sq = dx * dx + dy * dy
+
+      cond do
+        dist_sq > hover_radius_sq ->
+          best
+
+        best == nil ->
+          {kind, node_id, idx, dist_sq}
+
+        dist_sq < elem(best, 3) ->
+          {kind, node_id, idx, dist_sq}
+
+        true ->
+          best
+      end
+    end)
+    |> case do
+      nil -> nil
+      {kind, node_id, idx, _} -> {kind, node_id, idx}
+    end
+  end
+
   defp upsert_link(links, %{to: to} = link) do
     links
     |> Enum.reject(&(&1.to == to))
     |> Kernel.++([link])
+  end
+
+  defp pop_link_from_input(links, node_id, in_idx) do
+    split_link(links, fn link -> link.to == {node_id, in_idx} end)
+  end
+
+  defp pop_link_from_output(links, node_id, out_idx) do
+    split_link(links, fn link -> link.from == {node_id, out_idx} end)
+  end
+
+  defp split_link(links, pred) do
+    case Enum.split_with(links, fn link -> not pred.(link) end) do
+      {before, [link | rest]} -> {link, before ++ rest}
+      _ -> {nil, links}
+    end
   end
 
   defp update_node(%{nodes: nodes} = state, id, fun) do
