@@ -1,7 +1,7 @@
 defmodule Easel.MixProject do
   use Mix.Project
 
-  @version "0.3.3"
+  @version "0.3.4"
   @source_url "https://github.com/jasonstiebs/easel"
 
   def project do
