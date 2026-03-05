@@ -8,6 +8,8 @@ defmodule PhxDemo.Examples.NodeEditor do
   @rows_top_pad 8
   @rows_bottom_pad 10
   @port_x_pad 10
+  @port_radius 5
+  @port_hit_radius 9
 
   @grid 32
 
@@ -72,7 +74,8 @@ defmodule PhxDemo.Examples.NodeEditor do
         %{from: {:multiply, 0}, to: {:set_color, 1}, color: "rgba(244, 114, 182, 0.95)"}
       ],
       selected: :set_color,
-      dragging: nil
+      dragging: nil,
+      pending_link: nil
     }
   end
 
@@ -83,10 +86,59 @@ defmodule PhxDemo.Examples.NodeEditor do
     end
   end
 
+  def pending_output_label(%{pending_link: nil}), do: nil
+
+  def pending_output_label(%{pending_link: %{from: {node_id, out_idx}}, nodes: nodes}) do
+    with %{title: title, outputs: outputs} <- Enum.find(nodes, &(&1.id == node_id)),
+         label when is_binary(label) <- Enum.at(outputs, out_idx) do
+      "#{title}.#{label}"
+    else
+      _ -> nil
+    end
+  end
+
+  def mouse_down(state, x, y) do
+    case port_hit(state.nodes, x, y) do
+      {:output, node, out_idx, label} ->
+        nodes = bring_to_front(state.nodes, node.id)
+
+        %{
+          state
+          | nodes: nodes,
+            selected: node.id,
+            dragging: nil,
+            pending_link: %{from: {node.id, out_idx}, color: wire_color(label)}
+        }
+
+      {:input, node, in_idx, _label} ->
+        nodes = bring_to_front(state.nodes, node.id)
+
+        case state.pending_link do
+          %{from: {from_id, out_idx}, color: color} when from_id != node.id ->
+            link = %{from: {from_id, out_idx}, to: {node.id, in_idx}, color: color}
+
+            %{
+              state
+              | nodes: nodes,
+                selected: node.id,
+                dragging: nil,
+                pending_link: nil,
+                links: upsert_link(state.links, link)
+            }
+
+          _ ->
+            %{state | nodes: nodes, selected: node.id, dragging: nil, pending_link: nil}
+        end
+
+      nil ->
+        start_drag(state, x, y)
+    end
+  end
+
   def start_drag(state, x, y) do
     case node_at(state.nodes, x, y) do
       nil ->
-        %{state | selected: nil, dragging: nil}
+        %{state | selected: nil, dragging: nil, pending_link: nil}
 
       node ->
         nodes = bring_to_front(state.nodes, node.id)
@@ -165,6 +217,7 @@ defmodule PhxDemo.Examples.NodeEditor do
 
   def render(state) do
     nodes_by_id = Map.new(state.nodes, &{&1.id, &1})
+    pending_from = state.pending_link && state.pending_link.from
 
     state.links
     |> Enum.reduce(Easel.new(@width, @height), fn link, canvas ->
@@ -172,7 +225,7 @@ defmodule PhxDemo.Examples.NodeEditor do
     end)
     |> then(fn canvas ->
       Enum.reduce(state.nodes, canvas, fn node, acc ->
-        draw_node(acc, node, state.selected == node.id)
+        draw_node(acc, node, state.selected == node.id, pending_from)
       end)
     end)
     |> Easel.render()
@@ -207,7 +260,7 @@ defmodule PhxDemo.Examples.NodeEditor do
     end
   end
 
-  defp draw_node(canvas, node, selected?) do
+  defp draw_node(canvas, node, selected?, pending_from) do
     h = node_height(node)
 
     canvas =
@@ -244,9 +297,10 @@ defmodule PhxDemo.Examples.NodeEditor do
     |> Enum.with_index()
     |> Enum.reduce(canvas, fn {label, idx}, acc ->
       {px, py} = output_port(node, idx)
+      active? = pending_from == {node.id, idx}
 
       acc
-      |> draw_port(px, py, pin_color(label))
+      |> draw_port(px, py, pin_color(label), active?)
       |> Easel.set_fill_style("#cbd5e1")
       |> Easel.set_font("12px sans-serif")
       |> Easel.set_text_align("right")
@@ -255,15 +309,27 @@ defmodule PhxDemo.Examples.NodeEditor do
     end)
   end
 
-  defp draw_port(canvas, x, y, color) do
-    canvas
-    |> Easel.begin_path()
-    |> Easel.arc(x, y, 5, 0, 2 * :math.pi())
-    |> Easel.set_fill_style(color)
-    |> Easel.fill()
-    |> Easel.set_stroke_style("rgba(15, 23, 42, 0.95)")
-    |> Easel.set_line_width(1)
-    |> Easel.stroke()
+  defp draw_port(canvas, x, y, color, active? \\ false) do
+    canvas =
+      canvas
+      |> Easel.begin_path()
+      |> Easel.arc(x, y, @port_radius, 0, 2 * :math.pi())
+      |> Easel.set_fill_style(color)
+      |> Easel.fill()
+      |> Easel.set_stroke_style("rgba(15, 23, 42, 0.95)")
+      |> Easel.set_line_width(1)
+      |> Easel.stroke()
+
+    if active? do
+      canvas
+      |> Easel.begin_path()
+      |> Easel.arc(x, y, @port_radius + 3, 0, 2 * :math.pi())
+      |> Easel.set_stroke_style("rgba(248, 250, 252, 0.95)")
+      |> Easel.set_line_width(1.6)
+      |> Easel.stroke()
+    else
+      canvas
+    end
   end
 
   defp input_port(node, idx), do: {node.x + @port_x_pad, port_y(node, idx)}
@@ -294,6 +360,44 @@ defmodule PhxDemo.Examples.NodeEditor do
     end
   end
 
+  defp port_hit(nodes, x, y) do
+    nodes
+    |> Enum.reverse()
+    |> Enum.find_value(fn node ->
+      input_hit(node, x, y) || output_hit(node, x, y)
+    end)
+  end
+
+  defp input_hit(node, x, y) do
+    node.inputs
+    |> Enum.with_index()
+    |> Enum.find_value(fn {label, idx} ->
+      {px, py} = input_port(node, idx)
+      if near_port?(x, y, px, py), do: {:input, node, idx, label}
+    end)
+  end
+
+  defp output_hit(node, x, y) do
+    node.outputs
+    |> Enum.with_index()
+    |> Enum.find_value(fn {label, idx} ->
+      {px, py} = output_port(node, idx)
+      if near_port?(x, y, px, py), do: {:output, node, idx, label}
+    end)
+  end
+
+  defp near_port?(x, y, px, py) do
+    dx = x - px
+    dy = y - py
+    dx * dx + dy * dy <= @port_hit_radius * @port_hit_radius
+  end
+
+  defp upsert_link(links, %{to: to} = link) do
+    links
+    |> Enum.reject(&(&1.to == to))
+    |> Kernel.++([link])
+  end
+
   defp update_node(%{nodes: nodes} = state, id, fun) do
     updated =
       Enum.map(nodes, fn node ->
@@ -304,6 +408,12 @@ defmodule PhxDemo.Examples.NodeEditor do
   end
 
   defp clamp(v, lo, hi), do: v |> max(lo) |> min(hi)
+
+  defp wire_color("Exec"), do: "rgba(248, 250, 252, 0.95)"
+  defp wire_color("Hue"), do: "rgba(244, 114, 182, 0.95)"
+  defp wire_color("Delta"), do: "rgba(56, 189, 248, 0.95)"
+  defp wire_color("Seconds"), do: "rgba(56, 189, 248, 0.95)"
+  defp wire_color(_), do: "rgba(196, 181, 253, 0.95)"
 
   defp pin_color("Exec"), do: "#f8fafc"
   defp pin_color("Hue"), do: "#f472b6"

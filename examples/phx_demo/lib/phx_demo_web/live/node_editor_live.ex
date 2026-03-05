@@ -13,7 +13,7 @@ defmodule PhxDemoWeb.NodeEditorLive do
   end
 
   def handle_event("fg:mousedown", %{"x" => x, "y" => y}, socket) do
-    state = NodeEditor.start_drag(socket.assigns.state, x * 1.0, y * 1.0)
+    state = NodeEditor.mouse_down(socket.assigns.state, x * 1.0, y * 1.0)
     {:noreply, assign_state(socket, state)}
   end
 
@@ -45,6 +45,8 @@ defmodule PhxDemoWeb.NodeEditorLive do
   end
 
   def render(assigns) do
+    assigns = assign(assigns, :pending_output, NodeEditor.pending_output_label(assigns.state))
+
     ~H"""
     <.demo title="Node Editor — drag nodes" code_id="node_editor">
       <div class="flex gap-2 mb-3">
@@ -64,8 +66,9 @@ defmodule PhxDemoWeb.NodeEditorLive do
       </div>
 
       <p class="text-sm text-gray-500 mt-2">
-        Drag nodes around like a tiny Blueprint graph.
+        Drag nodes around like a tiny Blueprint graph. Click an output pin, then an input pin to connect.
         Selected: {NodeEditor.selected_title(@state) || "none"}
+        <span :if={@pending_output}> · connecting from  {@pending_output}</span>
       </p>
     </.demo>
     """
