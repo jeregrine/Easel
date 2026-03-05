@@ -17,7 +17,7 @@ defmodule PhxDemoWeb.NodeEditorLive do
 
   def handle_event("fg:mousedown", %{"x" => x, "y" => y}, socket) do
     state = NodeEditor.mouse_down(socket.assigns.state, x * 1.0, y * 1.0)
-    {:noreply, draw_state(socket, state)}
+    {:noreply, draw_state(socket, state, snapshot?: true)}
   end
 
   def handle_event("fg:mousemove", %{"x" => x, "y" => y}, socket) do
@@ -38,13 +38,13 @@ defmodule PhxDemoWeb.NodeEditorLive do
     if state == socket.assigns.state do
       {:noreply, socket}
     else
-      {:noreply, assign_editor_state(socket, state)}
+      {:noreply, assign_state(socket, state)}
     end
   end
 
   def handle_event("reset", _, socket) do
     state = NodeEditor.init()
-    {:noreply, draw_state(socket, state)}
+    {:noreply, draw_state(socket, state, snapshot?: true)}
   end
 
   def render(assigns) do
@@ -83,11 +83,12 @@ defmodule PhxDemoWeb.NodeEditorLive do
     """
   end
 
-  defp draw_state(socket, state) do
+  defp draw_state(socket, state, opts \\ []) do
     canvas = NodeEditor.render(state, socket.assigns.template_opts)
 
     socket
     |> assign_editor_state(state)
+    |> maybe_snapshot_canvas(canvas, opts)
     |> Easel.LiveView.draw("fg", canvas, clear: true)
   end
 
@@ -97,6 +98,10 @@ defmodule PhxDemoWeb.NodeEditorLive do
     socket
     |> assign_editor_state(state)
     |> assign(:canvas, canvas)
+  end
+
+  defp maybe_snapshot_canvas(socket, canvas, opts) do
+    if opts[:snapshot?], do: assign(socket, :canvas, canvas), else: socket
   end
 
   defp assign_editor_state(socket, state) do
