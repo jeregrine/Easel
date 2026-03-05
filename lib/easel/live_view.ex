@@ -167,6 +167,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       * `on_mouse_down` - enable mousedown events (pushes `"\#{id}:mousedown"`)
       * `on_mouse_up` - enable mouseup events (pushes `"\#{id}:mouseup"`)
       * `on_mouse_move` - enable mousemove events (pushes `"\#{id}:mousemove"`)
+      * `mouse_move_fps` - optional max rate for mousemove push events (default: frame-synced)
       * `on_key_down` - enable keydown events (pushes `"\#{id}:keydown"`)
 
     Any additional attributes are passed through to the `<canvas>` element.
@@ -181,6 +182,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
     attr(:on_mouse_down, :boolean, default: false)
     attr(:on_mouse_up, :boolean, default: false)
     attr(:on_mouse_move, :boolean, default: false)
+    attr(:mouse_move_fps, :integer, default: nil)
     attr(:on_key_down, :boolean, default: false)
     attr(:rest, :global)
 
@@ -193,7 +195,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
         |> then(fn e -> if assigns.on_mouse_move, do: ["mousemove" | e], else: e end)
         |> then(fn e -> if assigns.on_key_down, do: ["keydown" | e], else: e end)
 
-      assigns = assign(assigns, :events, Phoenix.json_library().encode!(events))
+      assigns = assign(assigns, :events, Phoenix.json_library().encode_to_iodata!(events))
 
       ~H"""
       <canvas
@@ -203,14 +205,19 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
         height={@height}
         class={@class}
         tabindex={if @on_key_down, do: "0"}
-        data-ops={Phoenix.json_library().encode!(@ops)}
-        data-templates={Phoenix.json_library().encode!(@templates)}
+        data-ops={Phoenix.json_library().encode_to_iodata!(@ops)}
+        data-templates={Phoenix.json_library().encode_to_iodata!(@templates)}
         data-events={@events}
+        data-mousemove-fps={@mouse_move_fps}
         {@rest}
       />
       <script :type={ColocatedHook} name=".Easel" runtime>
         {
           canvasXY(e) {
+            if (typeof e.offsetX === "number" && typeof e.offsetY === "number") {
+              return { x: Math.round(e.offsetX), y: Math.round(e.offsetY) };
+            }
+
             const rect = this.el.getBoundingClientRect();
             return {
               x: Math.round(e.clientX - rect.left),
@@ -291,26 +298,58 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
             const parsed = JSON.parse(raw);
             this.templates = Object.assign(this.templates || {}, parsed);
           },
-          drawFromData() {
+          drawPayload({ ops = [], clear = false } = {}) {
             this.ensureDpr();
-            this.loadTemplates();
-            const ops = JSON.parse(this.el.dataset.ops || "[]");
             const ctx = this.context;
             const dpr = this.dpr || 1;
             ctx.setTransform(1, 0, 0, 1, 0, 0);
-            ctx.clearRect(0, 0, this.el.width, this.el.height);
+            if (clear) {
+              ctx.clearRect(0, 0, this.el.width, this.el.height);
+            }
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
             if (ops.length > 0) {
               this.executeOps(ops);
             }
           },
+          drawFromData() {
+            this.loadTemplates();
+            const ops = JSON.parse(this.el.dataset.ops || "[]");
+            this.drawPayload({ ops, clear: true });
+          },
+          enqueueCommand(command) {
+            if (command.type === "clear") {
+              this._pendingCommands = [command];
+              return;
+            }
+
+            if (command.type === "draw" && command.payload && command.payload.clear) {
+              this._pendingCommands = [command];
+              return;
+            }
+
+            this._pendingCommands.push(command);
+          },
           scheduleFrame() {
             if (this._rafId) return;
             this._rafId = requestAnimationFrame(() => {
               this._rafId = null;
+
               if (this._dirty) {
                 this._dirty = false;
                 this.drawFromData();
+              }
+
+              if (this._pendingCommands.length > 0) {
+                const commands = this._pendingCommands;
+                this._pendingCommands = [];
+
+                for (const command of commands) {
+                  if (command.type === "clear") {
+                    this.drawPayload({ clear: true });
+                  } else if (command.type === "draw") {
+                    this.drawPayload(command.payload || {});
+                  }
+                }
               }
             });
           },
@@ -334,17 +373,25 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
             this.templates = {};
             this._dirty = false;
             this._rafId = null;
+            this._pendingCommands = [];
+            this._mouseMoveRafId = null;
+            this._mouseMoveTimeoutId = null;
+            this._mouseMoveLatest = null;
+            const moveFps = parseInt(this.el.dataset.mousemoveFps || "0", 10);
+            this._mouseMoveIntervalMs = Number.isFinite(moveFps) && moveFps > 0
+              ? Math.max(1, Math.round(1000 / moveFps))
+              : 0;
             this.drawFromData();
 
-            this.handleEvent(`easel:${this.el.id}:draw`, ({ ops, templates }) => {
+            this.handleEvent(`easel:${this.el.id}:draw`, ({ ops = [], templates, clear }) => {
               if (templates) Object.assign(this.templates, templates);
-              const dpr = this.dpr || 1;
-              this.context.setTransform(dpr, 0, 0, dpr, 0, 0);
-              this.executeOps(ops);
+              this.enqueueCommand({ type: "draw", payload: { ops, clear: !!clear } });
+              this.scheduleFrame();
             });
 
             this.handleEvent(`easel:${this.el.id}:clear`, () => {
-              this.context.clearRect(0, 0, this.el.width, this.el.height);
+              this.enqueueCommand({ type: "clear" });
+              this.scheduleFrame();
             });
 
             const events = JSON.parse(this.el.dataset.events || "[]");
@@ -362,6 +409,32 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
                     meta: e.metaKey
                   });
                 });
+              } else if (eventType === "mousemove") {
+                this.el.addEventListener("mousemove", (e) => {
+                  this._mouseMoveLatest = this.canvasXY(e);
+
+                  if (this._mouseMoveIntervalMs > 0) {
+                    if (this._mouseMoveTimeoutId) return;
+
+                    this._mouseMoveTimeoutId = setTimeout(() => {
+                      this._mouseMoveTimeoutId = null;
+                      const point = this._mouseMoveLatest;
+                      this._mouseMoveLatest = null;
+                      if (point) this.pushEvent(`${id}:mousemove`, point);
+                    }, this._mouseMoveIntervalMs);
+
+                    return;
+                  }
+
+                  if (this._mouseMoveRafId) return;
+
+                  this._mouseMoveRafId = requestAnimationFrame(() => {
+                    this._mouseMoveRafId = null;
+                    const point = this._mouseMoveLatest;
+                    this._mouseMoveLatest = null;
+                    if (point) this.pushEvent(`${id}:mousemove`, point);
+                  });
+                });
               } else {
                 this.el.addEventListener(eventType, (e) => {
                   this.pushEvent(`${id}:${eventType}`, this.canvasXY(e));
@@ -375,6 +448,10 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
           },
           destroyed() {
             if (this._rafId) cancelAnimationFrame(this._rafId);
+            if (this._mouseMoveRafId) cancelAnimationFrame(this._mouseMoveRafId);
+            if (this._mouseMoveTimeoutId) clearTimeout(this._mouseMoveTimeoutId);
+            this._pendingCommands = [];
+            this._mouseMoveLatest = null;
           }
         }
       </script>
@@ -489,6 +566,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       * `ops` — list of drawing operations
       * `templates` — map of template definitions (for instance rendering)
       * `on_click`, `on_mouse_down`, `on_mouse_up`, `on_mouse_move`, `on_key_down` — event flags
+      * `mouse_move_fps` — optional max rate for mousemove push events on this layer
 
     Only the topmost layer with event flags will receive pointer events.
     Lower layers have `pointer-events: none` by default.
@@ -507,6 +585,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       attr(:on_mouse_down, :boolean)
       attr(:on_mouse_up, :boolean)
       attr(:on_mouse_move, :boolean)
+      attr(:mouse_move_fps, :integer)
       attr(:on_key_down, :boolean)
     end
 
@@ -544,6 +623,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
           on_mouse_down={Map.get(layer, :on_mouse_down, false)}
           on_mouse_up={Map.get(layer, :on_mouse_up, false)}
           on_mouse_move={Map.get(layer, :on_mouse_move, false)}
+          mouse_move_fps={Map.get(layer, :mouse_move_fps, nil)}
           on_key_down={Map.get(layer, :on_key_down, false)}
         />
       </div>
@@ -571,13 +651,8 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
           %{ops: canvas.ops}
         end
 
-      if opts[:clear] do
-        socket
-        |> Phoenix.LiveView.push_event("easel:#{id}:clear", %{})
-        |> Phoenix.LiveView.push_event("easel:#{id}:draw", payload)
-      else
-        Phoenix.LiveView.push_event(socket, "easel:#{id}:draw", payload)
-      end
+      payload = if opts[:clear], do: Map.put(payload, :clear, true), else: payload
+      Phoenix.LiveView.push_event(socket, "easel:#{id}:draw", payload)
     end
 
     @doc """
@@ -636,6 +711,10 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       interval = Keyword.get(opts, :interval, 16)
       canvas_assign = Keyword.get(opts, :canvas_assign, nil)
 
+      if timer_ref = animation_timer(socket, id) do
+        Process.cancel_timer(timer_ref)
+      end
+
       timer_ref =
         if Phoenix.LiveView.connected?(socket) do
           Process.send_after(self(), {:easel_tick, id}, interval)
@@ -646,12 +725,14 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
         state_key: state_key,
         canvas_assign: canvas_assign,
         interval: interval,
-        running: true,
-        timer_ref: timer_ref
+        running: true
       }
 
       animations = Map.get(socket.assigns, :__easel_animations, %{})
-      Phoenix.Component.assign(socket, :__easel_animations, Map.put(animations, id, anim))
+
+      socket
+      |> Phoenix.Component.assign(:__easel_animations, Map.put(animations, id, anim))
+      |> put_animation_timer(id, timer_ref)
     end
 
     @doc """
@@ -668,19 +749,16 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       if anim && anim.running do
         state = socket.assigns[anim.state_key]
         {canvas, new_state} = anim.tick_fn.(state)
-        canvas = Easel.render(canvas)
 
-        # Schedule next tick and store timer_ref
         timer_ref = Process.send_after(self(), {:easel_tick, id}, anim.interval)
-        updated_anim = %{anim | timer_ref: timer_ref}
-        animations = Map.put(animations, id, updated_anim)
 
-        socket = Phoenix.Component.assign(socket, :__easel_animations, animations)
-        socket = Phoenix.Component.assign(socket, anim.state_key, new_state)
+        socket =
+          socket
+          |> put_animation_timer(id, timer_ref)
+          |> Phoenix.Component.assign(anim.state_key, new_state)
 
-        # Update canvas assign so the template re-renders with new ops
         if anim.canvas_assign do
-          Phoenix.Component.assign(socket, anim.canvas_assign, canvas)
+          Phoenix.Component.assign(socket, anim.canvas_assign, Easel.render(canvas))
         else
           socket
         end
@@ -697,13 +775,34 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
 
       case Map.get(animations, id) do
         nil ->
-          socket
+          delete_animation_timer(socket, id)
 
         anim ->
-          if anim.timer_ref, do: Process.cancel_timer(anim.timer_ref)
+          if timer_ref = animation_timer(socket, id) do
+            Process.cancel_timer(timer_ref)
+          end
+
           updated = Map.put(animations, id, %{anim | running: false})
-          Phoenix.Component.assign(socket, :__easel_animations, updated)
+
+          socket
+          |> Phoenix.Component.assign(:__easel_animations, updated)
+          |> delete_animation_timer(id)
       end
+    end
+
+    defp animation_timers(socket), do: Map.get(socket.private, :__easel_animation_timers, %{})
+    defp animation_timer(socket, id), do: Map.get(animation_timers(socket), id)
+
+    defp put_animation_timer(socket, id, nil), do: delete_animation_timer(socket, id)
+
+    defp put_animation_timer(socket, id, timer_ref) do
+      timers = Map.put(animation_timers(socket), id, timer_ref)
+      Phoenix.LiveView.put_private(socket, :__easel_animation_timers, timers)
+    end
+
+    defp delete_animation_timer(socket, id) do
+      timers = Map.delete(animation_timers(socket), id)
+      Phoenix.LiveView.put_private(socket, :__easel_animation_timers, timers)
     end
   end
 end

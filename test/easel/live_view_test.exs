@@ -117,6 +117,23 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
         assert html =~ ~s(mousemove)
       end
 
+      test "mouse_move_fps adds data-mousemove-fps attribute" do
+        assigns = %{}
+
+        html =
+          rendered_to_string(~H"""
+            <Easel.LiveView.canvas
+              id="test-canvas"
+              width={100}
+              height={100}
+              on_mouse_move
+              mouse_move_fps={30}
+            />
+          """)
+
+        assert html =~ ~s(data-mousemove-fps="30")
+      end
+
       test "on_key_down adds tabindex for focus" do
         assigns = %{}
 
@@ -170,7 +187,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
                ] = ops
       end
 
-      test "pushes clear then draw with clear: true", %{socket: socket} do
+      test "pushes a single draw event with clear: true", %{socket: socket} do
         canvas =
           Easel.new(100, 100)
           |> Easel.fill_rect(0, 0, 50, 50)
@@ -178,11 +195,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
         socket = Easel.LiveView.draw(socket, "c1", canvas, clear: true)
         events = socket.private.live_temp[:push_events]
 
-        # push_event prepends, so order is reversed in the list
-        assert [
-                 ["easel:c1:draw", %{ops: [["fillRect", [0, 0, 50, 50]]]}],
-                 ["easel:c1:clear", %{}]
-               ] = events
+        assert [["easel:c1:draw", %{ops: [["fillRect", [0, 0, 50, 50]]], clear: true}]] = events
       end
 
       test "renders ops from Easel.render", %{socket: socket} do
@@ -374,6 +387,20 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
           """)
 
         assert html =~ ~s(click)
+      end
+
+      test "layer mouse_move_fps is passed to canvas" do
+        assigns = %{}
+
+        html =
+          rendered_to_string(~H"""
+            <Easel.LiveView.canvas_stack id="stack" width={100} height={100}>
+              <:layer id="bg" ops={[]} />
+              <:layer id="fg" ops={[]} on_mouse_move mouse_move_fps={30} />
+            </Easel.LiveView.canvas_stack>
+          """)
+
+        assert html =~ ~s(data-mousemove-fps="30")
       end
     end
 

@@ -215,20 +215,63 @@ defmodule PhxDemo.Examples.NodeEditor do
     |> Easel.render()
   end
 
-  def render(state) do
+  def template_canvas do
+    Easel.new(@width, @height)
+    |> port_templates()
+  end
+
+  def render(state), do: render(state, nil)
+
+  def render(state, template_opts) do
     nodes_by_id = Map.new(state.nodes, &{&1.id, &1})
     pending_from = state.pending_link && state.pending_link.from
 
     state.links
-    |> Enum.reduce(Easel.new(@width, @height), fn link, canvas ->
-      draw_link(canvas, nodes_by_id, link)
-    end)
+    |> Enum.reduce(
+      Easel.new(@width, @height)
+      |> maybe_with_template_opts(template_opts)
+      |> maybe_define_port_templates(template_opts),
+      fn link, canvas ->
+        draw_link(canvas, nodes_by_id, link)
+      end
+    )
     |> then(fn canvas ->
       Enum.reduce(state.nodes, canvas, fn node, acc ->
         draw_node(acc, node, state.selected == node.id, pending_from)
       end)
     end)
     |> Easel.render()
+  end
+
+  defp port_templates(canvas) do
+    canvas
+    |> Easel.template(
+      :port,
+      fn c ->
+        c
+        |> Easel.begin_path()
+        |> Easel.arc(0, 0, @port_radius, 0, 2 * :math.pi())
+        |> Easel.fill()
+        |> Easel.set_stroke_style("rgba(15, 23, 42, 0.95)")
+        |> Easel.set_line_width(1)
+        |> Easel.stroke()
+      end,
+      x: 0,
+      y: 0
+    )
+    |> Easel.template(
+      :port_active,
+      fn c ->
+        c
+        |> Easel.begin_path()
+        |> Easel.arc(0, 0, @port_radius + 3, 0, 2 * :math.pi())
+        |> Easel.set_stroke_style("rgba(248, 250, 252, 0.95)")
+        |> Easel.set_line_width(1.6)
+        |> Easel.stroke()
+      end,
+      x: 0,
+      y: 0
+    )
   end
 
   defp draw_link(canvas, nodes_by_id, %{
@@ -278,59 +321,66 @@ defmodule PhxDemo.Examples.NodeEditor do
       |> Easel.set_text_baseline("middle")
       |> Easel.fill_text(node.title, node.x + 10, node.y + @header_h / 2)
 
-    canvas =
+    input_rows =
       node.inputs
       |> Enum.with_index()
-      |> Enum.reduce(canvas, fn {label, idx}, acc ->
+      |> Enum.map(fn {label, idx} ->
         {px, py} = input_port(node, idx)
+        %{label: label, px: px, py: py}
+      end)
 
+    output_rows =
+      node.outputs
+      |> Enum.with_index()
+      |> Enum.map(fn {label, idx} ->
+        {px, py} = output_port(node, idx)
+        %{label: label, idx: idx, px: px, py: py}
+      end)
+
+    port_instances =
+      Enum.map(input_rows, fn row -> %{x: row.px, y: row.py, fill: pin_color(row.label)} end) ++
+        Enum.map(output_rows, fn row -> %{x: row.px, y: row.py, fill: pin_color(row.label)} end)
+
+    active_instances =
+      for row <- output_rows, pending_from == {node.id, row.idx}, do: %{x: row.px, y: row.py}
+
+    canvas =
+      canvas
+      |> instances_if_any(:port, port_instances)
+      |> instances_if_any(:port_active, active_instances)
+
+    canvas =
+      Enum.reduce(input_rows, canvas, fn row, acc ->
         acc
-        |> draw_port(px, py, pin_color(label))
         |> Easel.set_fill_style("#cbd5e1")
         |> Easel.set_font("12px sans-serif")
         |> Easel.set_text_align("left")
         |> Easel.set_text_baseline("middle")
-        |> Easel.fill_text(label, px + 10, py)
+        |> Easel.fill_text(row.label, row.px + 10, row.py)
       end)
 
-    node.outputs
-    |> Enum.with_index()
-    |> Enum.reduce(canvas, fn {label, idx}, acc ->
-      {px, py} = output_port(node, idx)
-      active? = pending_from == {node.id, idx}
-
+    Enum.reduce(output_rows, canvas, fn row, acc ->
       acc
-      |> draw_port(px, py, pin_color(label), active?)
       |> Easel.set_fill_style("#cbd5e1")
       |> Easel.set_font("12px sans-serif")
       |> Easel.set_text_align("right")
       |> Easel.set_text_baseline("middle")
-      |> Easel.fill_text(label, px - 10, py)
+      |> Easel.fill_text(row.label, row.px - 10, row.py)
     end)
   end
 
-  defp draw_port(canvas, x, y, color, active? \\ false) do
-    canvas =
-      canvas
-      |> Easel.begin_path()
-      |> Easel.arc(x, y, @port_radius, 0, 2 * :math.pi())
-      |> Easel.set_fill_style(color)
-      |> Easel.fill()
-      |> Easel.set_stroke_style("rgba(15, 23, 42, 0.95)")
-      |> Easel.set_line_width(1)
-      |> Easel.stroke()
+  defp instances_if_any(canvas, _name, []), do: canvas
+  defp instances_if_any(canvas, name, instances), do: Easel.instances(canvas, name, instances)
 
-    if active? do
-      canvas
-      |> Easel.begin_path()
-      |> Easel.arc(x, y, @port_radius + 3, 0, 2 * :math.pi())
-      |> Easel.set_stroke_style("rgba(248, 250, 252, 0.95)")
-      |> Easel.set_line_width(1.6)
-      |> Easel.stroke()
-    else
-      canvas
-    end
-  end
+  defp maybe_with_template_opts(canvas, nil), do: canvas
+
+  defp maybe_with_template_opts(canvas, opts) when is_map(opts),
+    do: Easel.with_template_opts(canvas, opts)
+
+  defp maybe_with_template_opts(canvas, _), do: canvas
+
+  defp maybe_define_port_templates(canvas, nil), do: port_templates(canvas)
+  defp maybe_define_port_templates(canvas, _), do: canvas
 
   defp input_port(node, idx), do: {node.x + @port_x_pad, port_y(node, idx)}
   defp output_port(node, idx), do: {node.x + @node_w - @port_x_pad, port_y(node, idx)}

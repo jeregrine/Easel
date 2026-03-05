@@ -594,7 +594,8 @@ defmodule Easel do
   defp quantize(v, key, opts) when is_float(v) do
     case quantize_places(opts, key) do
       nil -> v
-      places when is_integer(places) and places >= 0 -> Float.round(v, places)
+      0 -> round(v)
+      places when is_integer(places) and places > 0 -> Float.round(v, places)
       _ -> v
     end
   end

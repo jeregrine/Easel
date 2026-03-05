@@ -5,16 +5,19 @@ defmodule PhxDemoWeb.NodeEditorLive do
 
   def mount(_params, _session, socket) do
     state = NodeEditor.init()
+    template_canvas = NodeEditor.template_canvas()
 
     {:ok,
      socket
      |> assign(:background, NodeEditor.render_background())
+     |> assign(:templates, template_canvas.templates)
+     |> assign(:template_opts, template_canvas.template_opts)
      |> assign_state(state)}
   end
 
   def handle_event("fg:mousedown", %{"x" => x, "y" => y}, socket) do
     state = NodeEditor.mouse_down(socket.assigns.state, x * 1.0, y * 1.0)
-    {:noreply, assign_state(socket, state)}
+    {:noreply, draw_state(socket, state)}
   end
 
   def handle_event("fg:mousemove", %{"x" => x, "y" => y}, socket) do
@@ -23,7 +26,7 @@ defmodule PhxDemoWeb.NodeEditorLive do
     if state == socket.assigns.state do
       {:noreply, socket}
     else
-      {:noreply, assign_state(socket, state)}
+      {:noreply, draw_state(socket, state)}
     end
   end
 
@@ -35,18 +38,16 @@ defmodule PhxDemoWeb.NodeEditorLive do
     if state == socket.assigns.state do
       {:noreply, socket}
     else
-      {:noreply, assign(socket, :state, state)}
+      {:noreply, assign_editor_state(socket, state)}
     end
   end
 
   def handle_event("reset", _, socket) do
     state = NodeEditor.init()
-    {:noreply, assign_state(socket, state)}
+    {:noreply, draw_state(socket, state)}
   end
 
   def render(assigns) do
-    assigns = assign(assigns, :pending_output, NodeEditor.pending_output_label(assigns.state))
-
     ~H"""
     <.demo title="Node Editor — drag nodes" code_id="node_editor">
       <div class="flex gap-2 mb-3">
@@ -61,22 +62,47 @@ defmodule PhxDemoWeb.NodeEditorLive do
           class="select-none"
         >
           <:layer id="bg" ops={@background.ops} />
-          <:layer id="fg" ops={@canvas.ops} on_mouse_down on_mouse_move on_mouse_up />
+          <:layer
+            id="fg"
+            ops={@canvas.ops}
+            templates={@templates}
+            on_mouse_down
+            on_mouse_move
+            mouse_move_fps={30}
+            on_mouse_up
+          />
         </Easel.LiveView.canvas_stack>
       </div>
 
       <p class="text-sm text-gray-500 mt-2">
         Drag nodes around like a tiny Blueprint graph. Click an output pin, then an input pin to connect.
-        Selected: {NodeEditor.selected_title(@state) || "none"}
+        Selected: {@selected_title || "none"}
         <span :if={@pending_output}> · connecting from  {@pending_output}</span>
       </p>
     </.demo>
     """
   end
 
+  defp draw_state(socket, state) do
+    canvas = NodeEditor.render(state, socket.assigns.template_opts)
+
+    socket
+    |> assign_editor_state(state)
+    |> Easel.LiveView.draw("fg", canvas, clear: true)
+  end
+
   defp assign_state(socket, state) do
+    canvas = NodeEditor.render(state, socket.assigns.template_opts)
+
+    socket
+    |> assign_editor_state(state)
+    |> assign(:canvas, canvas)
+  end
+
+  defp assign_editor_state(socket, state) do
     socket
     |> assign(:state, state)
-    |> assign(:canvas, NodeEditor.render(state))
+    |> assign(:selected_title, NodeEditor.selected_title(state))
+    |> assign(:pending_output, NodeEditor.pending_output_label(state))
   end
 end

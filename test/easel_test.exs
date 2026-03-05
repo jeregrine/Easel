@@ -247,6 +247,18 @@ defmodule EaselTest do
       assert row == [10.1, 21.0, 1.235, 0.99]
     end
 
+    test "precision 0 quantization emits integers for float fields" do
+      canvas =
+        Easel.new(100, 100)
+        |> Easel.template(:t, fn c -> Easel.fill(c) end)
+        |> Easel.instances(:t, [%{x: 10.1234, y: 20.9876}], x: 0, y: 0)
+        |> Easel.render()
+
+      [["__instances", ["t", [row], _palette, cols]]] = canvas.ops
+      assert cols == [0, 1]
+      assert row == [10, 21]
+    end
+
     test "template quantization defaults apply to instances" do
       canvas =
         Easel.new(100, 100)

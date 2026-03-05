@@ -5,6 +5,7 @@ defmodule PhxDemoWeb.BoidsLive do
   @height PhxDemo.Examples.boids_height()
   @max_boids 1000
   @frame_ms 16
+  @instance_quant [x: 0, y: 0, rotate: 1]
   @bucket_colors 0..35 |> Enum.map(&"hsl(#{&1 * 10}, 70%, 60%)") |> List.to_tuple()
 
   def mount(_params, _session, socket) do
@@ -23,9 +24,7 @@ defmodule PhxDemoWeb.BoidsLive do
           |> Easel.close_path()
           |> Easel.fill()
         end,
-        x: 1,
-        y: 1,
-        rotate: 3
+        @instance_quant
       )
 
     canvas = render_boids(boids, template_canvas.template_opts)
@@ -37,8 +36,6 @@ defmodule PhxDemoWeb.BoidsLive do
       |> Easel.render()
 
     templates = template_canvas.templates
-
-    now = System.monotonic_time(:millisecond)
 
     socket =
       socket
@@ -53,9 +50,11 @@ defmodule PhxDemoWeb.BoidsLive do
       |> assign(:boid_count, length(boids))
       |> assign(:fps, 0)
       |> assign(:avg_tick_ms, 0.0)
-      |> assign(:fps_frames, 0)
-      |> assign(:fps_tick_acc_ms, 0.0)
-      |> assign(:fps_window_start, now)
+      |> Phoenix.LiveView.put_private(:boids_perf, %{
+        frames: 0,
+        tick_acc_ms: 0.0,
+        window_start: System.monotonic_time(:millisecond)
+      })
       |> Easel.LiveView.animate(
         "fg",
         :boids,
@@ -131,10 +130,17 @@ defmodule PhxDemoWeb.BoidsLive do
 
   defp update_fps_stats(socket, tick_ms, boid_count) do
     now = System.monotonic_time(:millisecond)
-    frames = socket.assigns.fps_frames + 1
-    tick_acc_ms = socket.assigns.fps_tick_acc_ms + tick_ms
-    window_start = socket.assigns.fps_window_start
-    elapsed = now - window_start
+
+    perf =
+      Map.get(socket.private, :boids_perf, %{
+        frames: 0,
+        tick_acc_ms: 0.0,
+        window_start: now
+      })
+
+    frames = perf.frames + 1
+    tick_acc_ms = perf.tick_acc_ms + tick_ms
+    elapsed = now - perf.window_start
 
     if elapsed >= 1000 do
       fps = round(frames * 1000 / elapsed)
@@ -144,13 +150,17 @@ defmodule PhxDemoWeb.BoidsLive do
       |> assign(:fps, fps)
       |> assign(:avg_tick_ms, avg_tick_ms)
       |> assign(:boid_count, boid_count)
-      |> assign(:fps_frames, 0)
-      |> assign(:fps_tick_acc_ms, 0.0)
-      |> assign(:fps_window_start, now)
+      |> Phoenix.LiveView.put_private(:boids_perf, %{
+        frames: 0,
+        tick_acc_ms: 0.0,
+        window_start: now
+      })
     else
-      socket
-      |> assign(:fps_frames, frames)
-      |> assign(:fps_tick_acc_ms, tick_acc_ms)
+      Phoenix.LiveView.put_private(socket, :boids_perf, %{
+        frames: frames,
+        tick_acc_ms: tick_acc_ms,
+        window_start: perf.window_start
+      })
     end
   end
 
