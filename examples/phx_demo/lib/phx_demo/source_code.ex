@@ -77,6 +77,13 @@ defmodule PhxDemo.SourceCode do
         {"Pathfinding module", "lib/phx_demo/examples/pathfinding.ex"},
         {"Pathfinding LiveView", "lib/phx_demo_web/live/pathfinding_live.ex"}
       ]
+    },
+    "node_editor" => %{
+      title: "Node Editor",
+      files: [
+        {"Node Editor module", "lib/phx_demo/examples/node_editor.ex"},
+        {"Node Editor LiveView", "lib/phx_demo_web/live/node_editor_live.ex"}
+      ]
     }
   }
 

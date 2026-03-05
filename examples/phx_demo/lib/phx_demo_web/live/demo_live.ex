@@ -20,7 +20,8 @@ defmodule PhxDemoWeb.DemoLive do
     {"/lissajous", "〰️ Lissajous", "Colorful harmonic curves"},
     {"/flow", "🌪️ Flow Field", "Particle flow + vectors"},
     {"/wave", "🌊 Wave Grid", "Interference pattern playground"},
-    {"/pathfinding", "🧭 Pathfinding", "Draw walls and compare BFS / DFS / A* / Greedy"}
+    {"/pathfinding", "🧭 Pathfinding", "Draw walls and compare BFS / DFS / A* / Greedy"},
+    {"/node-editor", "🧩 Node Editor", "Simple Blueprint-style graph editor"}
   ]
 
   def mount(_params, _session, socket) do
