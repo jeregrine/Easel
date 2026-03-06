@@ -1,5 +1,7 @@
 # Bar chart — Elixir popularity by year (fictional data)
-# Run: mix run examples/term/chart.exs
+# Run: mix run examples/term/chart.exs [--mode auto|luma|silhouette|braille]
+
+Code.require_file("example_opts.exs", __DIR__)
 
 width = 600
 height = 400
@@ -94,12 +96,15 @@ canvas =
   |> Easel.render()
 
 if Easel.Terminal.available?() do
-  Easel.Terminal.render(canvas,
-    title: "Chart",
-    color: :ansi256,
-    dpr: 2.0,
-    samples: 2,
-    fit: :contain
+  Easel.Terminal.render(
+    canvas,
+    TermExampleOpts.merge_terminal_mode(
+      title: "Chart",
+      color: :ansi256,
+      dpr: 2.0,
+      samples: 2,
+      fit: :contain
+    )
   )
 else
   IO.puts("Easel.Terminal is unavailable.")

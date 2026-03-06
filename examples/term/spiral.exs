@@ -1,5 +1,7 @@
 # Rainbow spiral
-# Run: mix run examples/term/spiral.exs
+# Run: mix run examples/term/spiral.exs [--mode auto|luma|silhouette|braille]
+
+Code.require_file("example_opts.exs", __DIR__)
 
 width = 500
 height = 500
@@ -47,12 +49,15 @@ canvas =
   |> Easel.render()
 
 if Easel.Terminal.available?() do
-  Easel.Terminal.render(canvas,
-    title: "Spiral",
-    color: :ansi256,
-    dpr: 2.0,
-    samples: 2,
-    fit: :contain
+  Easel.Terminal.render(
+    canvas,
+    TermExampleOpts.merge_terminal_mode(
+      title: "Spiral",
+      color: :ansi256,
+      dpr: 2.0,
+      samples: 2,
+      fit: :contain
+    )
   )
 else
   IO.puts("Easel.Terminal is unavailable.")

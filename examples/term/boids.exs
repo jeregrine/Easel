@@ -1,7 +1,9 @@
 # Boids flocking simulation
-# Run: mix run examples/term/boids.exs
+# Run: mix run examples/term/boids.exs [--mode auto|luma|silhouette|braille]
 #
 # Uses Easel.Terminal.animate/5 to run in the terminal.
+
+Code.require_file("example_opts.exs", __DIR__)
 # Press q (or Ctrl+C) to quit.
 
 defmodule Boids do
@@ -221,16 +223,18 @@ if Easel.Terminal.available?() do
       next = Boids.tick(boids)
       {Boids.render(next), next}
     end,
-    title: "Boids",
-    fps: 24,
-    color: :ansi256,
-    dpr: 1.5,
-    samples: 2,
-    glyph_width: 6,
-    glyph_height: 12,
-    background_threshold: 0.1,
-    fit: :contain,
-    char_cache_size: 20_000
+    TermExampleOpts.merge_terminal_mode(
+      title: "Boids",
+      fps: 24,
+      color: :ansi256,
+      dpr: 1.5,
+      samples: 2,
+      glyph_width: 6,
+      glyph_height: 12,
+      background_threshold: 0.1,
+      fit: :contain,
+      char_cache_size: 20_000
+    )
   )
 else
   IO.puts("Easel.Terminal is unavailable.")

@@ -1,5 +1,7 @@
 # Smiley face
-# Run: mix run examples/term/smiley.exs
+# Run: mix run examples/term/smiley.exs [--mode auto|luma|silhouette|braille]
+
+Code.require_file("example_opts.exs", __DIR__)
 
 canvas =
   Easel.new(300, 300)
@@ -30,12 +32,15 @@ canvas =
   |> Easel.render()
 
 if Easel.Terminal.available?() do
-  Easel.Terminal.render(canvas,
-    title: "Smiley",
-    color: :ansi256,
-    dpr: 2.0,
-    samples: 2,
-    fit: :contain
+  Easel.Terminal.render(
+    canvas,
+    TermExampleOpts.merge_terminal_mode(
+      title: "Smiley",
+      color: :ansi256,
+      dpr: 2.0,
+      samples: 2,
+      fit: :contain
+    )
   )
 else
   IO.puts("Easel.Terminal is unavailable.")

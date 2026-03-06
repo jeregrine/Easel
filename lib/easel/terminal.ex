@@ -42,7 +42,8 @@ defmodule Easel.Terminal do
 
   ## Options
 
-    * `:charset` - set a manual luma ramp string, or `:auto` (default) for silhouette fitting
+    * `:charset` - set a manual luma ramp string, `:auto` (default) for silhouette fitting, or `:braille` for a fast braille renderer
+    * `:mode` - explicitly choose `:luma`, `:silhouette`, or `:braille` (optional)
     * `:invert` - invert luma ramp mapping (only for manual charset mode, default `false`)
     * `:fit` - `:contain` (default) or `:fill`
     * `:cell_aspect` - character cell height/width ratio (default `2.0`)
@@ -69,10 +70,15 @@ defmodule Easel.Terminal do
             "rgb buffer is too small: got #{byte_size(rgb)} bytes, expected at least #{expected}"
     end
 
-    if auto_charset?(opts) do
-      frame_from_rgb_silhouette(%{width: width, height: height, rgb: rgb}, columns, rows, opts)
-    else
-      frame_from_rgb_luma(%{width: width, height: height, rgb: rgb}, columns, rows, opts)
+    case render_mode(opts) do
+      :silhouette ->
+        frame_from_rgb_silhouette(%{width: width, height: height, rgb: rgb}, columns, rows, opts)
+
+      :braille ->
+        frame_from_rgb_braille(%{width: width, height: height, rgb: rgb}, columns, rows, opts)
+
+      :luma ->
+        frame_from_rgb_luma(%{width: width, height: height, rgb: rgb}, columns, rows, opts)
     end
   end
 
@@ -621,11 +627,18 @@ defmodule Easel.Terminal do
     end
   end
 
-  defp auto_charset?(opts) do
-    case Keyword.get(opts, :charset, :auto) do
-      :auto -> true
-      nil -> true
-      _ -> false
+  defp render_mode(opts) do
+    case Keyword.get(opts, :mode) do
+      mode when mode in [:luma, :silhouette, :braille] ->
+        mode
+
+      _ ->
+        case Keyword.get(opts, :charset, :auto) do
+          :auto -> :silhouette
+          nil -> :silhouette
+          :braille -> :braille
+          _ -> :luma
+        end
     end
   end
 
@@ -659,6 +672,44 @@ defmodule Easel.Terminal do
     }
 
     lines = for row <- 0..(rows - 1), do: render_line(row, render_opts)
+
+    lines
+    |> Enum.intersperse("\n")
+    |> IO.iodata_to_binary()
+  end
+
+  defp frame_from_rgb_braille(%{width: width, height: height, rgb: rgb}, columns, rows, opts) do
+    fit = Keyword.get(opts, :fit, :contain)
+    color_mode = Keyword.get(opts, :color, :none)
+    cell_aspect = cell_aspect(opts)
+
+    bg_threshold =
+      opts
+      |> Keyword.get(:background_threshold, @default_bg_threshold)
+      |> normalize_ratio(@default_bg_threshold)
+
+    contrast_profile = contrast_profile(opts, color_mode)
+
+    {draw_cols, draw_rows, off_x, off_y} =
+      fit_bounds(width, height, columns, rows, cell_aspect, fit)
+
+    sample_maps = braille_sample_maps(width, height, draw_cols, draw_rows)
+
+    render_opts = %{
+      columns: columns,
+      src_w: width,
+      rgb: rgb,
+      color_mode: color_mode,
+      draw_cols: draw_cols,
+      draw_rows: draw_rows,
+      off_x: off_x,
+      off_y: off_y,
+      bg_threshold: bg_threshold,
+      contrast_profile: contrast_profile,
+      sample_maps: sample_maps
+    }
+
+    lines = for row <- 0..(rows - 1), do: render_braille_line(row, render_opts)
 
     lines
     |> Enum.intersperse("\n")
@@ -739,6 +790,10 @@ defmodule Easel.Terminal do
     x_map = sample_axis_map(src_w, draw_cols, samples)
     y_map = sample_axis_map(src_h, draw_rows, samples)
     %{x: x_map, y: y_map}
+  end
+
+  defp braille_sample_maps(src_w, src_h, draw_cols, draw_rows) do
+    %{x: sample_axis_map(src_w, draw_cols, 2), y: sample_axis_map(src_h, draw_rows, 4)}
   end
 
   defp silhouette_sample_maps(src_w, src_h, draw_cols, draw_rows, glyph_w, glyph_h) do
@@ -863,6 +918,60 @@ defmodule Easel.Terminal do
     end
   end
 
+  defp render_braille_line(row, opts) do
+    %{
+      columns: columns,
+      src_w: src_w,
+      rgb: rgb,
+      color_mode: color_mode,
+      draw_cols: draw_cols,
+      draw_rows: draw_rows,
+      off_x: off_x,
+      off_y: off_y,
+      bg_threshold: bg_threshold,
+      contrast_profile: contrast_profile,
+      sample_maps: sample_maps
+    } = opts
+
+    {line, current_color} =
+      Enum.map_reduce(0..(columns - 1), nil, fn col, current_color ->
+        inside? =
+          col >= off_x and col < off_x + draw_cols and
+            row >= off_y and row < off_y + draw_rows
+
+        if inside? do
+          rel_col = col - off_x
+          rel_row = row - off_y
+
+          x_samples = elem(sample_maps.x, rel_col)
+          y_samples = elem(sample_maps.y, rel_row)
+
+          {ch, color_value} =
+            braille_cell(
+              rgb,
+              src_w,
+              x_samples,
+              y_samples,
+              bg_threshold,
+              color_mode,
+              contrast_profile
+            )
+
+          render_cell_with_ansi(ch, color_value, current_color, color_mode)
+        else
+          render_cell_with_ansi(" ", nil, current_color, color_mode)
+        end
+      end)
+
+    case {color_mode, current_color} do
+      {:ansi256, code} when is_integer(code) ->
+        [line, "\e[0m"]
+
+      _ ->
+        line
+    end
+  end
+
   defp render_silhouette_line(row, opts) do
     %{
       columns: columns,
@@ -924,6 +1033,59 @@ defmodule Easel.Terminal do
         line
     end
   end
+
+  defp braille_cell(rgb, src_w, x_samples, y_samples, bg_threshold, color_mode, contrast_profile) do
+    {mask, r_sum, g_sum, b_sum, count} =
+      Enum.reduce(0..3, {0, 0, 0, 0, 0}, fn y_idx, {mask_acc, r_acc, g_acc, b_acc, n_acc} ->
+        py = elem(y_samples, y_idx)
+
+        Enum.reduce(0..1, {mask_acc, r_acc, g_acc, b_acc, n_acc}, fn x_idx,
+                                                                     {mask_acc2, r_acc2, g_acc2,
+                                                                      b_acc2, n_acc2} ->
+          px = elem(x_samples, x_idx)
+
+          {r, g, b} =
+            pixel_rgb(rgb, src_w, px, py)
+            |> adjust_rgb_for_theme(contrast_profile)
+
+          if luma(r, g, b) / 255 <= bg_threshold do
+            {mask_acc2, r_acc2, g_acc2, b_acc2, n_acc2}
+          else
+            {
+              mask_acc2 ||| braille_dot_bit(x_idx, y_idx),
+              r_acc2 + r,
+              g_acc2 + g,
+              b_acc2 + b,
+              n_acc2 + 1
+            }
+          end
+        end)
+      end)
+
+    if mask == 0 do
+      {" ", nil}
+    else
+      ch = <<0x2800 + mask::utf8>>
+
+      color_value =
+        if color_mode == :ansi256 do
+          rgb_to_ansi256(round(r_sum / count), round(g_sum / count), round(b_sum / count))
+        else
+          nil
+        end
+
+      {ch, color_value}
+    end
+  end
+
+  defp braille_dot_bit(0, 0), do: 0x01
+  defp braille_dot_bit(0, 1), do: 0x02
+  defp braille_dot_bit(0, 2), do: 0x04
+  defp braille_dot_bit(1, 0), do: 0x08
+  defp braille_dot_bit(1, 1), do: 0x10
+  defp braille_dot_bit(1, 2), do: 0x20
+  defp braille_dot_bit(0, 3), do: 0x40
+  defp braille_dot_bit(1, 3), do: 0x80
 
   defp cell_plane_masks(
          rgb,

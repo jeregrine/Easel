@@ -1,5 +1,7 @@
 # Animated terminal clock (digital + abstract progress bar)
-# Run: mix run examples/term/clock.exs
+# Run: mix run examples/term/clock.exs [--mode auto|luma|silhouette|braille]
+
+Code.require_file("example_opts.exs", __DIR__)
 
 width = 640
 height = 260
@@ -48,16 +50,18 @@ if Easel.Terminal.available?() do
     fn %{tick: tick} = state ->
       {Clock.render(width, height, tick), %{state | tick: tick + 1}}
     end,
-    title: "Clock",
-    fps: 8,
-    color: :ansi256,
-    dpr: 2.0,
-    samples: 2,
-    glyph_width: 7,
-    glyph_height: 15,
-    background_threshold: 0.1,
-    fit: :contain,
-    char_cache_size: 20_000
+    TermExampleOpts.merge_terminal_mode(
+      title: "Clock",
+      fps: 8,
+      color: :ansi256,
+      dpr: 2.0,
+      samples: 2,
+      glyph_width: 7,
+      glyph_height: 15,
+      background_threshold: 0.1,
+      fit: :contain,
+      char_cache_size: 20_000
+    )
   )
 else
   IO.puts("Easel.Terminal is unavailable.")

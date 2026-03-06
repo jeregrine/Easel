@@ -69,6 +69,31 @@ defmodule EaselTerminalTest do
       refute frame =~ "#"
     end
 
+    test "braille mode renders unicode braille dots" do
+      image = %{
+        width: 2,
+        height: 4,
+        rgb: <<255, 255, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0>>
+      }
+
+      assert Easel.Terminal.frame_from_rgb(image, 1, 1, mode: :braille, fit: :fill) == "⠁"
+    end
+
+    test "braille mode supports ansi256 color" do
+      image = %{
+        width: 2,
+        height: 4,
+        rgb: <<255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0>>
+      }
+
+      frame =
+        Easel.Terminal.frame_from_rgb(image, 1, 1, mode: :braille, color: :ansi256, fit: :fill)
+
+      assert frame =~ "\e[38;5;"
+      assert frame =~ "⠁"
+      assert frame =~ "\e[0m"
+    end
+
     test "auto silhouette mode renders background as space" do
       if Easel.WX.available?() do
         image = %{width: 9, height: 19, rgb: :binary.copy(<<0, 0, 0>>, 9 * 19)}

@@ -1,5 +1,7 @@
 # Terminal wave animation
-# Run: mix run examples/term/terminal_wave.exs
+# Run: mix run examples/term/terminal_wave.exs [--mode auto|luma|silhouette|braille]
+
+Code.require_file("example_opts.exs", __DIR__)
 
 {term_cols, term_rows} =
   case {:io.columns(), :io.rows()} do
@@ -56,16 +58,18 @@ if Easel.Terminal.available?() do
     fn %{t: t} = state ->
       {render_frame.(t), %{state | t: t + 0.08}}
     end,
-    fps: 24,
-    color: :none,
-    fit: :contain,
-    cell_aspect: 2.0,
-    dpr: 2.0,
-    samples: 3,
-    glyph_width: 7,
-    glyph_height: 15,
-    background_threshold: 0.08,
-    char_cache_size: 20_000
+    TermExampleOpts.merge_terminal_mode(
+      fps: 24,
+      color: :none,
+      fit: :contain,
+      cell_aspect: 2.0,
+      dpr: 2.0,
+      samples: 3,
+      glyph_width: 7,
+      glyph_height: 15,
+      background_threshold: 0.08,
+      char_cache_size: 20_000
+    )
   )
 else
   IO.puts("Easel.Terminal is unavailable.")

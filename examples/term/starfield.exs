@@ -1,5 +1,7 @@
 # Starfield — random stars with varying sizes and brightness
-# Run: mix run examples/term/starfield.exs
+# Run: mix run examples/term/starfield.exs [--mode auto|luma|silhouette|braille]
+
+Code.require_file("example_opts.exs", __DIR__)
 
 width = 600
 height = 400
@@ -51,12 +53,15 @@ canvas =
   |> Easel.render()
 
 if Easel.Terminal.available?() do
-  Easel.Terminal.render(canvas,
-    title: "Starfield",
-    color: :ansi256,
-    dpr: 2.0,
-    samples: 2,
-    fit: :contain
+  Easel.Terminal.render(
+    canvas,
+    TermExampleOpts.merge_terminal_mode(
+      title: "Starfield",
+      color: :ansi256,
+      dpr: 2.0,
+      samples: 2,
+      fit: :contain
+    )
   )
 else
   IO.puts("Easel.Terminal is unavailable.")
