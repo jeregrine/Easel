@@ -601,10 +601,11 @@ defmodule Easel.Terminal do
     {draw_cols, draw_rows, off_x, off_y} =
       fit_bounds(width, height, columns, rows, cell_aspect, fit)
 
+    sample_maps = luma_sample_maps(width, height, draw_cols, draw_rows, samples)
+
     render_opts = %{
       columns: columns,
       src_w: width,
-      src_h: height,
       rgb: rgb,
       chars: chars,
       invert?: invert?,
@@ -613,8 +614,8 @@ defmodule Easel.Terminal do
       draw_rows: draw_rows,
       off_x: off_x,
       off_y: off_y,
-      samples: samples,
-      contrast_profile: contrast_profile
+      contrast_profile: contrast_profile,
+      sample_maps: sample_maps
     }
 
     lines = for row <- 0..(rows - 1), do: render_line(row, render_opts)
@@ -694,6 +695,12 @@ defmodule Easel.Terminal do
     end
   end
 
+  defp luma_sample_maps(src_w, src_h, draw_cols, draw_rows, samples) do
+    x_map = sample_axis_map(src_w, draw_cols, samples)
+    y_map = sample_axis_map(src_h, draw_rows, samples)
+    %{x: x_map, y: y_map}
+  end
+
   defp silhouette_sample_maps(src_w, src_h, draw_cols, draw_rows, glyph_w, glyph_h) do
     x_map =
       for col <- 0..(draw_cols - 1) do
@@ -724,6 +731,20 @@ defmodule Easel.Terminal do
     %{x: x_map, y: y_map}
   end
 
+  defp sample_axis_map(src_size, draw_size, sample_count) do
+    for idx <- 0..(draw_size - 1) do
+      start_pos = idx * src_size / draw_size
+      end_pos = (idx + 1) * src_size / draw_size
+
+      for sample_idx <- 0..(sample_count - 1) do
+        pos = start_pos + (sample_idx + 0.5) / sample_count * (end_pos - start_pos)
+        pos |> trunc() |> max(0) |> min(src_size - 1)
+      end
+      |> List.to_tuple()
+    end
+    |> List.to_tuple()
+  end
+
   defp fit_bounds(_src_w, _src_h, cols, rows, _cell_aspect, :fill) do
     {cols, rows, 0, 0}
   end
@@ -752,7 +773,6 @@ defmodule Easel.Terminal do
     %{
       columns: columns,
       src_w: src_w,
-      src_h: src_h,
       rgb: rgb,
       chars: chars,
       invert?: invert?,
@@ -761,8 +781,8 @@ defmodule Easel.Terminal do
       draw_rows: draw_rows,
       off_x: off_x,
       off_y: off_y,
-      samples: samples,
-      contrast_profile: contrast_profile
+      contrast_profile: contrast_profile,
+      sample_maps: sample_maps
     } = opts
 
     char_count = tuple_size(chars)
@@ -777,17 +797,11 @@ defmodule Easel.Terminal do
           rel_col = col - off_x
           rel_row = row - off_y
 
+          x_samples = elem(sample_maps.x, rel_col)
+          y_samples = elem(sample_maps.y, rel_row)
+
           {r, g, b} =
-            sample_rgb(
-              rgb,
-              src_w,
-              src_h,
-              rel_col,
-              rel_row,
-              draw_cols,
-              draw_rows,
-              samples
-            )
+            sample_rgb(rgb, src_w, x_samples, y_samples)
             |> adjust_rgb_for_theme(contrast_profile)
 
           luma = luma(r, g, b)
@@ -999,23 +1013,18 @@ defmodule Easel.Terminal do
     {ch, current_color}
   end
 
-  defp sample_rgb(rgb, src_w, src_h, col, row, draw_cols, draw_rows, samples) do
-    x0 = col * src_w / draw_cols
-    x1 = (col + 1) * src_w / draw_cols
-    y0 = row * src_h / draw_rows
-    y1 = (row + 1) * src_h / draw_rows
-
+  defp sample_rgb(rgb, src_w, x_samples, y_samples) do
     {r_sum, g_sum, b_sum, count} =
-      Enum.reduce(0..(samples - 1), {0, 0, 0, 0}, fn sy, {r_acc, g_acc, b_acc, n_acc} ->
-        Enum.reduce(0..(samples - 1), {r_acc, g_acc, b_acc, n_acc}, fn sx,
-                                                                       {r_acc2, g_acc2, b_acc2,
-                                                                        n_acc2} ->
-          x = x0 + (sx + 0.5) / samples * (x1 - x0)
-          y = y0 + (sy + 0.5) / samples * (y1 - y0)
+      Enum.reduce(0..(tuple_size(y_samples) - 1), {0, 0, 0, 0}, fn y_idx,
+                                                                   {r_acc, g_acc, b_acc, n_acc} ->
+        py = elem(y_samples, y_idx)
 
-          px = x |> trunc() |> max(0) |> min(src_w - 1)
-          py = y |> trunc() |> max(0) |> min(src_h - 1)
-
+        Enum.reduce(0..(tuple_size(x_samples) - 1), {r_acc, g_acc, b_acc, n_acc}, fn x_idx,
+                                                                                     {r_acc2,
+                                                                                      g_acc2,
+                                                                                      b_acc2,
+                                                                                      n_acc2} ->
+          px = elem(x_samples, x_idx)
           {r, g, b} = pixel_rgb(rgb, src_w, px, py)
           {r_acc2 + r, g_acc2 + g, b_acc2 + b, n_acc2 + 1}
         end)
