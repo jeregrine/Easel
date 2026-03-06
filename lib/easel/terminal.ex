@@ -16,6 +16,8 @@ defmodule Easel.Terminal do
   @default_glyph_width 9
   @default_glyph_height 19
   @default_glyph_threshold 0.5
+  @default_halfblock_samples 2
+  @default_halfblock_color_merge_distance 36
   @default_dark_min_luma 0.28
   @default_light_max_luma 0.72
   @glyph_profile_cache_table :easel_terminal_glyph_profile_cache
@@ -49,7 +51,9 @@ defmodule Easel.Terminal do
     * `:fit` - `:contain` (default) or `:fill`
     * `:cell_aspect` - character cell height/width ratio (default `2.0`)
     * `:samples` - per-cell supersampling edge length (manual charset mode, default `2`)
-    * `:background_threshold` - brightness below which pixels are treated as background in silhouette mode (default `0.05`)
+    * `:background_threshold` - brightness below which pixels are treated as background in silhouette/braille/halfblock modes (default `0.05`)
+    * `:halfblock_samples` - horizontal samples per half-block region; vertical samples use twice this value (default `2`)
+    * `:halfblock_color_merge_distance` - RGB distance threshold for collapsing top/bottom colors into a solid block (default `36`)
     * `:glyph_width` / `:glyph_height` - silhouette glyph mask size (defaults `9x19`)
     * `:glyph_threshold` - threshold for binarizing glyph masks (default `0.5`)
     * `:char_cache` - cache silhouette mask→glyph lookups (default `true`)
@@ -747,9 +751,25 @@ defmodule Easel.Terminal do
       |> Keyword.get(:background_threshold, @default_bg_threshold)
       |> normalize_ratio(@default_bg_threshold)
 
+    halfblock_samples =
+      normalize_positive_int(
+        Keyword.get(opts, :halfblock_samples, @default_halfblock_samples),
+        @default_halfblock_samples
+      )
+
+    merge_distance =
+      normalize_positive_int(
+        Keyword.get(
+          opts,
+          :halfblock_color_merge_distance,
+          @default_halfblock_color_merge_distance
+        ),
+        @default_halfblock_color_merge_distance
+      )
+
     contrast_profile = contrast_profile(opts, color_mode)
     geometry = fit_geometry(width, height, columns, rows, cell_aspect, fit)
-    sample_maps = halfblock_sample_maps(geometry, width, height)
+    sample_maps = halfblock_sample_maps(geometry, width, height, halfblock_samples)
 
     render_opts = %{
       columns: columns,
@@ -761,6 +781,7 @@ defmodule Easel.Terminal do
       off_x: geometry.off_x,
       off_y: geometry.off_y,
       bg_threshold: bg_threshold,
+      merge_distance: merge_distance,
       contrast_profile: contrast_profile,
       sample_maps: sample_maps
     }
@@ -876,10 +897,17 @@ defmodule Easel.Terminal do
     }
   end
 
-  defp halfblock_sample_maps(geometry, src_w, src_h) do
+  defp halfblock_sample_maps(geometry, src_w, src_h, samples) do
     %{
-      x: sample_axis_map(geometry.src_x0, geometry.src_x1, src_w, geometry.draw_cols, 1),
-      y: sample_axis_map(geometry.src_y0, geometry.src_y1, src_h, geometry.draw_rows, 2)
+      x: sample_axis_map(geometry.src_x0, geometry.src_x1, src_w, geometry.draw_cols, samples),
+      y:
+        sample_axis_map(
+          geometry.src_y0,
+          geometry.src_y1,
+          src_h,
+          geometry.draw_rows,
+          max(samples * 2, 2)
+        )
     }
   end
 
@@ -1048,6 +1076,7 @@ defmodule Easel.Terminal do
       off_x: off_x,
       off_y: off_y,
       bg_threshold: bg_threshold,
+      merge_distance: merge_distance,
       contrast_profile: contrast_profile,
       sample_maps: sample_maps
     } = opts
@@ -1073,6 +1102,7 @@ defmodule Easel.Terminal do
               y_samples,
               bg_threshold,
               color_mode,
+              merge_distance,
               contrast_profile
             )
 
@@ -1214,74 +1244,154 @@ defmodule Easel.Terminal do
          y_samples,
          bg_threshold,
          color_mode,
+         merge_distance,
          contrast_profile
        ) do
+    half = max(div(tuple_size(y_samples), 2), 1)
+
     top =
-      halfblock_region_color(
+      halfblock_region_info(
         rgb,
         src_w,
         x_samples,
-        elem(y_samples, 0),
+        y_samples,
+        0,
+        half - 1,
         bg_threshold,
         contrast_profile
       )
 
     bottom =
-      halfblock_region_color(
+      halfblock_region_info(
         rgb,
         src_w,
         x_samples,
-        elem(y_samples, 1),
+        y_samples,
+        half,
+        tuple_size(y_samples) - 1,
         bg_threshold,
         contrast_profile
       )
 
-    case {top, bottom, color_mode} do
-      {nil, nil, _} ->
-        {" ", nil, nil}
-
-      {{r, g, b}, nil, :ansi256} ->
-        {"▀", rgb_to_ansi256(r, g, b), nil}
-
-      {nil, {r, g, b}, :ansi256} ->
-        {"▄", rgb_to_ansi256(r, g, b), nil}
-
-      {{rt, gt, bt}, {rb, gb, bb}, :ansi256} ->
-        {"▀", rgb_to_ansi256(rt, gt, bt), rgb_to_ansi256(rb, gb, bb)}
-
-      {_top, nil, _} ->
-        {"▀", nil, nil}
-
-      {nil, _bottom, _} ->
-        {"▄", nil, nil}
-
-      {_top, _bottom, _} ->
-        {"█", nil, nil}
+    case color_mode do
+      :ansi256 -> halfblock_color_cell(top, bottom, merge_distance)
+      _ -> halfblock_mono_cell(top, bottom)
     end
   end
 
-  defp halfblock_region_color(rgb, src_w, x_samples, py, bg_threshold, contrast_profile) do
-    {r_sum, g_sum, b_sum, count} =
-      Enum.reduce(0..(tuple_size(x_samples) - 1), {0, 0, 0, 0}, fn x_idx,
-                                                                   {r_acc, g_acc, b_acc, n_acc} ->
-        px = elem(x_samples, x_idx)
+  defp halfblock_region_info(
+         _rgb,
+         _src_w,
+         _x_samples,
+         _y_samples,
+         start_idx,
+         end_idx,
+         _bg_threshold,
+         _contrast_profile
+       )
+       when end_idx < start_idx,
+       do: nil
 
-        {r, g, b} =
-          pixel_rgb(rgb, src_w, px, py)
-          |> adjust_rgb_for_theme(contrast_profile)
+  defp halfblock_region_info(
+         rgb,
+         src_w,
+         x_samples,
+         y_samples,
+         start_idx,
+         end_idx,
+         bg_threshold,
+         contrast_profile
+       ) do
+    {r_sum, g_sum, b_sum, count, total} =
+      Enum.reduce(start_idx..end_idx, {0, 0, 0, 0, 0}, fn y_idx,
+                                                          {r_acc, g_acc, b_acc, n_acc, t_acc} ->
+        py = elem(y_samples, y_idx)
 
-        if luma(r, g, b) / 255 <= bg_threshold do
-          {r_acc, g_acc, b_acc, n_acc}
-        else
-          {r_acc + r, g_acc + g, b_acc + b, n_acc + 1}
-        end
+        Enum.reduce(0..(tuple_size(x_samples) - 1), {r_acc, g_acc, b_acc, n_acc, t_acc}, fn x_idx,
+                                                                                            {r_acc2,
+                                                                                             g_acc2,
+                                                                                             b_acc2,
+                                                                                             n_acc2,
+                                                                                             t_acc2} ->
+          px = elem(x_samples, x_idx)
+
+          {r, g, b} =
+            pixel_rgb(rgb, src_w, px, py)
+            |> adjust_rgb_for_theme(contrast_profile)
+
+          if luma(r, g, b) / 255 <= bg_threshold do
+            {r_acc2, g_acc2, b_acc2, n_acc2, t_acc2 + 1}
+          else
+            {r_acc2 + r, g_acc2 + g, b_acc2 + b, n_acc2 + 1, t_acc2 + 1}
+          end
+        end)
       end)
 
     if count == 0 do
       nil
     else
-      {round(r_sum / count), round(g_sum / count), round(b_sum / count)}
+      rgb = {round(r_sum / count), round(g_sum / count), round(b_sum / count)}
+
+      %{
+        rgb: rgb,
+        code: rgb_to_ansi256(elem(rgb, 0), elem(rgb, 1), elem(rgb, 2)),
+        coverage: count / max(total, 1)
+      }
     end
+  end
+
+  defp halfblock_color_cell(nil, nil, _merge_distance), do: {" ", nil, nil}
+  defp halfblock_color_cell(%{code: code}, nil, _merge_distance), do: {"▀", code, nil}
+  defp halfblock_color_cell(nil, %{code: code}, _merge_distance), do: {"▄", code, nil}
+
+  defp halfblock_color_cell(top, bottom, merge_distance) do
+    merged_rgb = average_rgb(top.rgb, bottom.rgb)
+    merged_code = rgb_to_ansi256(elem(merged_rgb, 0), elem(merged_rgb, 1), elem(merged_rgb, 2))
+
+    cond do
+      top.code == bottom.code ->
+        {"█", top.code, nil}
+
+      rgb_distance(top.rgb, bottom.rgb) <= merge_distance ->
+        {"█", merged_code, nil}
+
+      top.coverage >= 0.85 and bottom.coverage < 0.25 ->
+        {"▀", top.code, nil}
+
+      bottom.coverage >= 0.85 and top.coverage < 0.25 ->
+        {"▄", bottom.code, nil}
+
+      true ->
+        {"▀", top.code, bottom.code}
+    end
+  end
+
+  defp halfblock_mono_cell(nil, nil), do: {" ", nil, nil}
+  defp halfblock_mono_cell(%{}, nil), do: {"▀", nil, nil}
+  defp halfblock_mono_cell(nil, %{}), do: {"▄", nil, nil}
+
+  defp halfblock_mono_cell(top, bottom) do
+    cond do
+      top.coverage >= 0.75 and bottom.coverage >= 0.75 ->
+        {"█", nil, nil}
+
+      top.coverage > bottom.coverage * 1.5 ->
+        {"▀", nil, nil}
+
+      bottom.coverage > top.coverage * 1.5 ->
+        {"▄", nil, nil}
+
+      true ->
+        {"█", nil, nil}
+    end
+  end
+
+  defp average_rgb({r1, g1, b1}, {r2, g2, b2}) do
+    {round((r1 + r2) / 2), round((g1 + g2) / 2), round((b1 + b2) / 2)}
+  end
+
+  defp rgb_distance({r1, g1, b1}, {r2, g2, b2}) do
+    abs(r1 - r2) + abs(g1 - g2) + abs(b1 - b2)
   end
 
   defp braille_cell(rgb, src_w, x_samples, y_samples, bg_threshold, color_mode, contrast_profile) do

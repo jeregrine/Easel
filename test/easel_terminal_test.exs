@@ -156,6 +156,31 @@ defmodule EaselTerminalTest do
       assert frame =~ "\e[0m"
     end
 
+    test "halfblock mode merges similar ansi colors into a solid block" do
+      image = %{width: 1, height: 2, rgb: <<255, 0, 0, 250, 10, 10>>}
+
+      frame =
+        Easel.Terminal.frame_from_rgb(image, 1, 1,
+          mode: :halfblock,
+          color: :ansi256,
+          fit: :fill,
+          halfblock_color_merge_distance: 255
+        )
+
+      assert frame =~ "█"
+      refute frame =~ "\e[48;5;"
+    end
+
+    test "halfblock mode accepts configurable sampling" do
+      image = %{width: 2, height: 4, rgb: :binary.copy(<<255, 255, 255>>, 8)}
+
+      assert Easel.Terminal.frame_from_rgb(image, 1, 1,
+               mode: :halfblock,
+               fit: :fill,
+               halfblock_samples: 3
+             ) == "█"
+    end
+
     test "auto silhouette mode renders background as space" do
       if Easel.WX.available?() do
         image = %{width: 9, height: 19, rgb: :binary.copy(<<0, 0, 0>>, 9 * 19)}
