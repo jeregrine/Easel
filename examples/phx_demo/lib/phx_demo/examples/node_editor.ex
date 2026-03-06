@@ -13,6 +13,8 @@ defmodule PhxDemo.Examples.NodeEditor do
   @port_hover_radius 18
 
   @grid 32
+  @min_zoom 0.5
+  @max_zoom 2.5
 
   def width, do: @width
   def height, do: @height
@@ -77,7 +79,8 @@ defmodule PhxDemo.Examples.NodeEditor do
       selected: :set_color,
       dragging: nil,
       pending_link: nil,
-      pointer: nil
+      pointer: nil,
+      viewport: %{scale: 1.0, offset_x: 0.0, offset_y: 0.0}
     }
   end
 
@@ -104,8 +107,27 @@ defmodule PhxDemo.Examples.NodeEditor do
 
   def pending_output_label(_), do: nil
 
-  def mouse_down(state, x, y) do
-    case port_hit(state.nodes, x, y) do
+  def zoom_percent(state) do
+    state
+    |> viewport()
+    |> Map.fetch!(:scale)
+    |> Kernel.*(100)
+    |> round()
+  end
+
+  def zoom_wheel(state, screen_x, screen_y, delta_y) do
+    factor = :math.pow(1.0015, -delta_y)
+    zoom_at(state, screen_x, screen_y, factor)
+  end
+
+  def zoom_pinch(state, screen_x, screen_y, scale_delta) do
+    zoom_at(state, screen_x, screen_y, scale_delta)
+  end
+
+  def mouse_down(state, screen_x, screen_y) do
+    {x, y} = screen_to_world(state, screen_x, screen_y)
+
+    case port_hit(state.nodes, x, y, viewport_scale(state)) do
       {:output, node, out_idx, label} ->
         nodes = bring_to_front(state.nodes, node.id)
 
@@ -225,9 +247,13 @@ defmodule PhxDemo.Examples.NodeEditor do
     end
   end
 
-  def drag(%{dragging: nil} = state, x, y), do: %{state | pointer: %{x: x, y: y}}
+  def drag(%{dragging: nil} = state, screen_x, screen_y) do
+    {x, y} = screen_to_world(state, screen_x, screen_y)
+    %{state | pointer: %{x: x, y: y}}
+  end
 
-  def drag(%{dragging: %{id: id, dx: dx, dy: dy}} = state, x, y) do
+  def drag(%{dragging: %{id: id, dx: dx, dy: dy}} = state, screen_x, screen_y) do
+    {x, y} = screen_to_world(state, screen_x, screen_y)
     state = %{state | pointer: %{x: x, y: y}}
 
     update_node(state, id, fn node ->
@@ -240,46 +266,65 @@ defmodule PhxDemo.Examples.NodeEditor do
 
   def stop_drag(state), do: %{state | dragging: nil}
 
-  def render_background do
-    canvas =
-      Easel.new(@width, @height)
-      |> Easel.set_fill_style("#040712")
-      |> Easel.fill_rect(0, 0, @width, @height)
+  def render_background(state \\ %{}) do
+    %{scale: scale, offset_x: offset_x, offset_y: offset_y} = viewport(state)
 
-    canvas =
-      Enum.reduce(0..div(@width, @grid), canvas, fn i, acc ->
+    {wx0, wy0} = {(0.0 - offset_x) / scale, (0.0 - offset_y) / scale}
+    {wx1, wy1} = {(@width - offset_x) / scale, (@height - offset_y) / scale}
+
+    min_wx = min(wx0, wx1)
+    max_wx = max(wx0, wx1)
+    min_wy = min(wy0, wy1)
+    max_wy = max(wy0, wy1)
+
+    x_start = floor_to_grid_index(min_wx) - 1
+    x_end = floor_to_grid_index(max_wx) + 1
+    y_start = floor_to_grid_index(min_wy) - 1
+    y_end = floor_to_grid_index(max_wy) + 1
+
+    Easel.new(@width, @height)
+    |> Easel.set_fill_style("#040712")
+    |> Easel.fill_rect(0, 0, @width, @height)
+    |> Easel.save()
+    |> Easel.translate(offset_x, offset_y)
+    |> Easel.scale(scale, scale)
+    |> then(fn canvas ->
+      Enum.reduce(x_start..x_end, canvas, fn i, acc ->
         x = i * @grid + 0.5
 
         color =
-          if rem(i, 4) == 0,
+          if Integer.mod(i, 4) == 0,
             do: "rgba(148, 163, 184, 0.16)",
             else: "rgba(71, 85, 105, 0.14)"
 
         acc
         |> Easel.begin_path()
-        |> Easel.move_to(x, 0)
-        |> Easel.line_to(x, @height)
+        |> Easel.move_to(x, min_wy - @grid)
+        |> Easel.line_to(x, max_wy + @grid)
         |> Easel.set_stroke_style(color)
-        |> Easel.set_line_width(1)
+        |> Easel.set_line_width(1 / scale)
         |> Easel.stroke()
       end)
-
-    Enum.reduce(0..div(@height, @grid), canvas, fn i, acc ->
-      y = i * @grid + 0.5
-
-      color =
-        if rem(i, 4) == 0,
-          do: "rgba(148, 163, 184, 0.16)",
-          else: "rgba(71, 85, 105, 0.14)"
-
-      acc
-      |> Easel.begin_path()
-      |> Easel.move_to(0, y)
-      |> Easel.line_to(@width, y)
-      |> Easel.set_stroke_style(color)
-      |> Easel.set_line_width(1)
-      |> Easel.stroke()
     end)
+    |> then(fn canvas ->
+      Enum.reduce(y_start..y_end, canvas, fn i, acc ->
+        y = i * @grid + 0.5
+
+        color =
+          if Integer.mod(i, 4) == 0,
+            do: "rgba(148, 163, 184, 0.16)",
+            else: "rgba(71, 85, 105, 0.14)"
+
+        acc
+        |> Easel.begin_path()
+        |> Easel.move_to(min_wx - @grid, y)
+        |> Easel.line_to(max_wx + @grid, y)
+        |> Easel.set_stroke_style(color)
+        |> Easel.set_line_width(1 / scale)
+        |> Easel.stroke()
+      end)
+    end)
+    |> Easel.restore()
     |> Easel.set_fill_style("rgba(2, 6, 23, 0.9)")
     |> Easel.fill_rect(0, 0, @width, 38)
     |> Easel.set_fill_style("rgba(226, 232, 240, 0.9)")
@@ -300,23 +345,30 @@ defmodule PhxDemo.Examples.NodeEditor do
   def render(state, template_opts) do
     nodes_by_id = Map.new(state.nodes, &{&1.id, &1})
     pending_from = state.pending_link && state.pending_link.from
-    hovered_port = hover_attach_target(state.nodes, state.pending_link, state.pointer)
 
-    state.links
-    |> Enum.reduce(
+    hovered_port =
+      hover_attach_target(state.nodes, state.pending_link, state.pointer, viewport_scale(state))
+
+    viewport = viewport(state)
+
+    base_canvas =
       Easel.new(@width, @height)
       |> maybe_with_template_opts(template_opts)
-      |> maybe_define_port_templates(template_opts),
-      fn link, canvas ->
-        draw_link(canvas, nodes_by_id, link)
-      end
-    )
+      |> maybe_define_port_templates(template_opts)
+      |> Easel.save()
+      |> Easel.translate(viewport.offset_x, viewport.offset_y)
+      |> Easel.scale(viewport.scale, viewport.scale)
+
+    Enum.reduce(state.links, base_canvas, fn link, canvas ->
+      draw_link(canvas, nodes_by_id, link)
+    end)
     |> then(fn canvas ->
       Enum.reduce(state.nodes, canvas, fn node, acc ->
         draw_node(acc, node, state.selected == node.id, pending_from, hovered_port)
       end)
     end)
     |> maybe_draw_pending_link(nodes_by_id, state.pending_link, state.pointer)
+    |> Easel.restore()
     |> Easel.render()
   end
 
@@ -530,45 +582,51 @@ defmodule PhxDemo.Examples.NodeEditor do
     end
   end
 
-  defp port_hit(nodes, x, y) do
+  defp port_hit(nodes, x, y, scale) do
     nodes
     |> Enum.reverse()
     |> Enum.find_value(fn node ->
-      input_hit(node, x, y) || output_hit(node, x, y)
+      input_hit(node, x, y, scale) || output_hit(node, x, y, scale)
     end)
   end
 
-  defp input_hit(node, x, y) do
+  defp input_hit(node, x, y, scale) do
     node.inputs
     |> Enum.with_index()
     |> Enum.find_value(fn {label, idx} ->
       {px, py} = input_port(node, idx)
-      if near_port?(x, y, px, py), do: {:input, node, idx, label}
+      if near_port?(x, y, px, py, scale), do: {:input, node, idx, label}
     end)
   end
 
-  defp output_hit(node, x, y) do
+  defp output_hit(node, x, y, scale) do
     node.outputs
     |> Enum.with_index()
     |> Enum.find_value(fn {label, idx} ->
       {px, py} = output_port(node, idx)
-      if near_port?(x, y, px, py), do: {:output, node, idx, label}
+      if near_port?(x, y, px, py, scale), do: {:output, node, idx, label}
     end)
   end
 
-  defp near_port?(x, y, px, py) do
+  defp near_port?(x, y, px, py, scale) do
+    radius = @port_hit_radius / max(scale, 0.001)
     dx = x - px
     dy = y - py
-    dx * dx + dy * dy <= @port_hit_radius * @port_hit_radius
+    dx * dx + dy * dy <= radius * radius
   end
 
-  defp hover_attach_target(_nodes, nil, _pointer), do: nil
-  defp hover_attach_target(_nodes, _pending_link, nil), do: nil
+  defp hover_attach_target(_nodes, nil, _pointer, _scale), do: nil
+  defp hover_attach_target(_nodes, _pending_link, nil, _scale), do: nil
 
-  defp hover_attach_target(nodes, %{dragging_endpoint: :to, from: {from_id, _out_idx}}, %{
-         x: x,
-         y: y
-       }) do
+  defp hover_attach_target(
+         nodes,
+         %{dragging_endpoint: :to, from: {from_id, _out_idx}},
+         %{
+           x: x,
+           y: y
+         },
+         scale
+       ) do
     candidates =
       for node <- nodes,
           node.id != from_id,
@@ -577,10 +635,15 @@ defmodule PhxDemo.Examples.NodeEditor do
         {:input, node.id, idx, px, py}
       end
 
-    nearest_port(candidates, x, y)
+    nearest_port(candidates, x, y, scale)
   end
 
-  defp hover_attach_target(nodes, %{dragging_endpoint: :from, to: {to_id, _in_idx}}, %{x: x, y: y}) do
+  defp hover_attach_target(
+         nodes,
+         %{dragging_endpoint: :from, to: {to_id, _in_idx}},
+         %{x: x, y: y},
+         scale
+       ) do
     candidates =
       for node <- nodes,
           node.id != to_id,
@@ -589,13 +652,14 @@ defmodule PhxDemo.Examples.NodeEditor do
         {:output, node.id, idx, px, py}
       end
 
-    nearest_port(candidates, x, y)
+    nearest_port(candidates, x, y, scale)
   end
 
-  defp hover_attach_target(_nodes, _pending_link, _pointer), do: nil
+  defp hover_attach_target(_nodes, _pending_link, _pointer, _scale), do: nil
 
-  defp nearest_port(candidates, x, y) do
-    hover_radius_sq = @port_hover_radius * @port_hover_radius
+  defp nearest_port(candidates, x, y, scale) do
+    radius = @port_hover_radius / max(scale, 0.001)
+    hover_radius_sq = radius * radius
 
     candidates
     |> Enum.reduce(nil, fn {kind, node_id, idx, px, py}, best ->
@@ -644,6 +708,44 @@ defmodule PhxDemo.Examples.NodeEditor do
     end
   end
 
+  defp zoom_at(state, _screen_x, _screen_y, scale_delta)
+       when not is_number(scale_delta) or scale_delta <= 0,
+       do: state
+
+  defp zoom_at(state, screen_x, screen_y, scale_delta) do
+    viewport = viewport(state)
+    scale = viewport.scale
+
+    new_scale = clamp(scale * scale_delta, @min_zoom, @max_zoom)
+
+    if abs(new_scale - scale) < 0.0001 do
+      state
+    else
+      {world_x, world_y} = screen_to_world(state, screen_x, screen_y)
+
+      new_viewport = %{
+        scale: new_scale,
+        offset_x: screen_x - world_x * new_scale,
+        offset_y: screen_y - world_y * new_scale
+      }
+
+      %{state | viewport: new_viewport, pointer: %{x: world_x, y: world_y}}
+    end
+  end
+
+  defp viewport(%{viewport: %{scale: scale, offset_x: ox, offset_y: oy}}) do
+    %{scale: scale, offset_x: ox, offset_y: oy}
+  end
+
+  defp viewport(_), do: %{scale: 1.0, offset_x: 0.0, offset_y: 0.0}
+
+  defp viewport_scale(state), do: state |> viewport() |> Map.fetch!(:scale)
+
+  defp screen_to_world(state, screen_x, screen_y) do
+    %{scale: scale, offset_x: offset_x, offset_y: offset_y} = viewport(state)
+    {(screen_x - offset_x) / scale, (screen_y - offset_y) / scale}
+  end
+
   defp update_node(%{nodes: nodes} = state, id, fun) do
     updated =
       Enum.map(nodes, fn node ->
@@ -654,6 +756,13 @@ defmodule PhxDemo.Examples.NodeEditor do
   end
 
   defp clamp(v, lo, hi), do: v |> max(lo) |> min(hi)
+
+  defp floor_to_grid_index(v) do
+    v
+    |> Kernel./(@grid)
+    |> Float.floor()
+    |> trunc()
+  end
 
   defp wire_color("Exec"), do: "rgba(248, 250, 252, 0.95)"
   defp wire_color("Hue"), do: "rgba(244, 114, 182, 0.95)"

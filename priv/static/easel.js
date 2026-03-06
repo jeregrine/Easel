@@ -85,6 +85,22 @@ function canvasXY(el, e) {
   };
 }
 
+function touchCenterDistance(el, t1, t2) {
+  const rect = el.getBoundingClientRect();
+  const x1 = t1.clientX - rect.left;
+  const y1 = t1.clientY - rect.top;
+  const x2 = t2.clientX - rect.left;
+  const y2 = t2.clientY - rect.top;
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+
+  return {
+    x: Math.round((x1 + x2) / 2),
+    y: Math.round((y1 + y2) / 2),
+    dist: Math.hypot(dx, dy),
+  };
+}
+
 export const EaselHook = {
   drawPayload({ops = [], clear = false} = {}) {
     this.ensureDpr();
@@ -104,6 +120,56 @@ export const EaselHook = {
     Object.assign(this._templates, templates);
     const ops = JSON.parse(this.el.dataset.ops || "[]");
     this.drawPayload({ops, clear: true});
+  },
+  queueWheel(payload) {
+    this._wheelLatest = payload;
+
+    if (this._wheelIntervalMs > 0) {
+      if (this._wheelTimeoutId) return;
+
+      this._wheelTimeoutId = setTimeout(() => {
+        this._wheelTimeoutId = null;
+        const data = this._wheelLatest;
+        this._wheelLatest = null;
+        if (data) this.pushEvent(`${this.el.id}:wheel`, data);
+      }, this._wheelIntervalMs);
+
+      return;
+    }
+
+    if (this._wheelRafId) return;
+
+    this._wheelRafId = requestAnimationFrame(() => {
+      this._wheelRafId = null;
+      const data = this._wheelLatest;
+      this._wheelLatest = null;
+      if (data) this.pushEvent(`${this.el.id}:wheel`, data);
+    });
+  },
+  queuePinch(payload) {
+    this._pinchLatest = payload;
+
+    if (this._pinchIntervalMs > 0) {
+      if (this._pinchTimeoutId) return;
+
+      this._pinchTimeoutId = setTimeout(() => {
+        this._pinchTimeoutId = null;
+        const data = this._pinchLatest;
+        this._pinchLatest = null;
+        if (data) this.pushEvent(`${this.el.id}:pinch`, data);
+      }, this._pinchIntervalMs);
+
+      return;
+    }
+
+    if (this._pinchRafId) return;
+
+    this._pinchRafId = requestAnimationFrame(() => {
+      this._pinchRafId = null;
+      const data = this._pinchLatest;
+      this._pinchLatest = null;
+      if (data) this.pushEvent(`${this.el.id}:pinch`, data);
+    });
   },
   enqueueCommand(command) {
     if (command.type === "clear") {
@@ -166,8 +232,22 @@ export const EaselHook = {
     this._mouseMoveRafId = null;
     this._mouseMoveTimeoutId = null;
     this._mouseMoveLatest = null;
+    this._wheelRafId = null;
+    this._wheelTimeoutId = null;
+    this._wheelLatest = null;
+    this._pinchRafId = null;
+    this._pinchTimeoutId = null;
+    this._pinchLatest = null;
+    this._pinchState = null;
+
     const moveFps = parseInt(this.el.dataset.mousemoveFps || "0", 10);
     this._mouseMoveIntervalMs = Number.isFinite(moveFps) && moveFps > 0 ? Math.max(1, Math.round(1000 / moveFps)) : 0;
+
+    const wheelFps = parseInt(this.el.dataset.wheelFps || "0", 10);
+    this._wheelIntervalMs = Number.isFinite(wheelFps) && wheelFps > 0 ? Math.max(1, Math.round(1000 / wheelFps)) : 0;
+
+    const pinchFps = parseInt(this.el.dataset.pinchFps || "0", 10);
+    this._pinchIntervalMs = Number.isFinite(pinchFps) && pinchFps > 0 ? Math.max(1, Math.round(1000 / pinchFps)) : 0;
     this.drawFromData();
 
     this.handleEvent(`easel:${this.el.id}:draw`, ({ops = [], templates, clear}) => {
@@ -222,6 +302,69 @@ export const EaselHook = {
             if (point) this.pushEvent(`${id}:mousemove`, point);
           });
         });
+      } else if (eventType === "wheel") {
+        this.el.addEventListener(
+          "wheel",
+          (e) => {
+            e.preventDefault();
+            const point = canvasXY(this.el, e);
+            this.queueWheel({
+              x: point.x,
+              y: point.y,
+              delta_x: e.deltaX,
+              delta_y: e.deltaY,
+              delta_z: e.deltaZ,
+              ctrl: e.ctrlKey,
+              shift: e.shiftKey,
+              alt: e.altKey,
+              meta: e.metaKey,
+            });
+          },
+          {passive: false},
+        );
+      } else if (eventType === "pinch") {
+        this.el.addEventListener(
+          "touchstart",
+          (e) => {
+            if (e.touches.length !== 2) {
+              this._pinchState = null;
+              return;
+            }
+
+            const data = touchCenterDistance(this.el, e.touches[0], e.touches[1]);
+            this._pinchState = {lastDist: data.dist};
+          },
+          {passive: true},
+        );
+
+        this.el.addEventListener(
+          "touchmove",
+          (e) => {
+            if (e.touches.length !== 2) {
+              this._pinchState = null;
+              return;
+            }
+
+            const data = touchCenterDistance(this.el, e.touches[0], e.touches[1]);
+            const prev = this._pinchState && this._pinchState.lastDist;
+            this._pinchState = {lastDist: data.dist};
+
+            if (!prev || prev <= 0) return;
+
+            const scale = data.dist / prev;
+            if (!Number.isFinite(scale) || Math.abs(scale - 1) < 0.002) return;
+
+            e.preventDefault();
+            this.queuePinch({x: data.x, y: data.y, scale});
+          },
+          {passive: false},
+        );
+
+        const resetPinch = () => {
+          this._pinchState = null;
+        };
+        this.el.addEventListener("touchend", resetPinch, {passive: true});
+        this.el.addEventListener("touchcancel", resetPinch, {passive: true});
       } else {
         this.el.addEventListener(eventType, (e) => {
           this.pushEvent(`${id}:${eventType}`, canvasXY(this.el, e));
@@ -237,7 +380,14 @@ export const EaselHook = {
     if (this._rafId) cancelAnimationFrame(this._rafId);
     if (this._mouseMoveRafId) cancelAnimationFrame(this._mouseMoveRafId);
     if (this._mouseMoveTimeoutId) clearTimeout(this._mouseMoveTimeoutId);
+    if (this._wheelRafId) cancelAnimationFrame(this._wheelRafId);
+    if (this._wheelTimeoutId) clearTimeout(this._wheelTimeoutId);
+    if (this._pinchRafId) cancelAnimationFrame(this._pinchRafId);
+    if (this._pinchTimeoutId) clearTimeout(this._pinchTimeoutId);
     this._pendingCommands = [];
     this._mouseMoveLatest = null;
+    this._wheelLatest = null;
+    this._pinchLatest = null;
+    this._pinchState = null;
   },
 };

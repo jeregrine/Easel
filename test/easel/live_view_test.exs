@@ -134,6 +134,62 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
         assert html =~ ~s(data-mousemove-fps="30")
       end
 
+      test "on_wheel enables wheel event" do
+        assigns = %{}
+
+        html =
+          rendered_to_string(~H"""
+            <Easel.LiveView.canvas id="test-canvas" width={100} height={100} on_wheel />
+          """)
+
+        assert html =~ ~s(wheel)
+      end
+
+      test "wheel_fps adds data-wheel-fps attribute" do
+        assigns = %{}
+
+        html =
+          rendered_to_string(~H"""
+            <Easel.LiveView.canvas
+              id="test-canvas"
+              width={100}
+              height={100}
+              on_wheel
+              wheel_fps={30}
+            />
+          """)
+
+        assert html =~ ~s(data-wheel-fps="30")
+      end
+
+      test "on_pinch enables pinch event" do
+        assigns = %{}
+
+        html =
+          rendered_to_string(~H"""
+            <Easel.LiveView.canvas id="test-canvas" width={100} height={100} on_pinch />
+          """)
+
+        assert html =~ ~s(pinch)
+      end
+
+      test "pinch_fps adds data-pinch-fps attribute" do
+        assigns = %{}
+
+        html =
+          rendered_to_string(~H"""
+            <Easel.LiveView.canvas
+              id="test-canvas"
+              width={100}
+              height={100}
+              on_pinch
+              pinch_fps={24}
+            />
+          """)
+
+        assert html =~ ~s(data-pinch-fps="24")
+      end
+
       test "on_key_down adds tabindex for focus" do
         assigns = %{}
 
@@ -401,6 +457,21 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
           """)
 
         assert html =~ ~s(data-mousemove-fps="30")
+      end
+
+      test "layer wheel_fps and pinch_fps are passed to canvas" do
+        assigns = %{}
+
+        html =
+          rendered_to_string(~H"""
+            <Easel.LiveView.canvas_stack id="stack" width={100} height={100}>
+              <:layer id="bg" ops={[]} />
+              <:layer id="fg" ops={[]} on_wheel wheel_fps={20} on_pinch pinch_fps={18} />
+            </Easel.LiveView.canvas_stack>
+          """)
+
+        assert html =~ ~s(data-wheel-fps="20")
+        assert html =~ ~s(data-pinch-fps="18")
       end
     end
 

@@ -9,7 +9,7 @@ defmodule PhxDemoWeb.NodeEditorLive do
 
     {:ok,
      socket
-     |> assign(:background, NodeEditor.render_background())
+     |> assign(:background, NodeEditor.render_background(state))
      |> assign(:templates, template_canvas.templates)
      |> assign(:template_opts, template_canvas.template_opts)
      |> assign_state(state)}
@@ -22,6 +22,26 @@ defmodule PhxDemoWeb.NodeEditorLive do
 
   def handle_event("fg:mousemove", %{"x" => x, "y" => y}, socket) do
     state = NodeEditor.drag(socket.assigns.state, x * 1.0, y * 1.0)
+
+    if state == socket.assigns.state do
+      {:noreply, socket}
+    else
+      {:noreply, draw_state(socket, state)}
+    end
+  end
+
+  def handle_event("fg:wheel", %{"x" => x, "y" => y, "delta_y" => delta_y}, socket) do
+    state = NodeEditor.zoom_wheel(socket.assigns.state, x * 1.0, y * 1.0, delta_y * 1.0)
+
+    if state == socket.assigns.state do
+      {:noreply, socket}
+    else
+      {:noreply, draw_state(socket, state)}
+    end
+  end
+
+  def handle_event("fg:pinch", %{"x" => x, "y" => y, "scale" => scale}, socket) do
+    state = NodeEditor.zoom_pinch(socket.assigns.state, x * 1.0, y * 1.0, scale * 1.0)
 
     if state == socket.assigns.state do
       {:noreply, socket}
@@ -70,13 +90,18 @@ defmodule PhxDemoWeb.NodeEditorLive do
             on_mouse_move
             mouse_move_fps={30}
             on_mouse_up
+            on_wheel
+            wheel_fps={30}
+            on_pinch
+            pinch_fps={30}
           />
         </Easel.LiveView.canvas_stack>
       </div>
 
       <p class="text-sm text-gray-500 mt-2">
         Drag nodes around like a tiny Blueprint graph. Click an output pin, then an input pin to connect.
-        Selected: {@selected_title || "none"}
+        Scroll or pinch to zoom.
+        Selected: {@selected_title || "none"} · zoom: {@zoom_percent}%
         <span :if={@pending_output}> · connecting from  {@pending_output}</span>
       </p>
     </.demo>
@@ -87,6 +112,7 @@ defmodule PhxDemoWeb.NodeEditorLive do
     canvas = NodeEditor.render(state, socket.assigns.template_opts)
 
     socket
+    |> maybe_draw_background(state)
     |> assign_editor_state(state)
     |> maybe_snapshot_canvas(canvas, opts)
     |> Easel.LiveView.draw("fg", canvas, clear: true)
@@ -104,10 +130,22 @@ defmodule PhxDemoWeb.NodeEditorLive do
     if opts[:snapshot?], do: assign(socket, :canvas, canvas), else: socket
   end
 
+  defp maybe_draw_background(socket, state) do
+    if viewport(state) == viewport(socket.assigns.state) do
+      socket
+    else
+      background = NodeEditor.render_background(state)
+      Easel.LiveView.draw(socket, "bg", background, clear: true)
+    end
+  end
+
+  defp viewport(state), do: Map.get(state, :viewport, %{scale: 1.0, offset_x: 0.0, offset_y: 0.0})
+
   defp assign_editor_state(socket, state) do
     socket
     |> assign(:state, state)
     |> assign(:selected_title, NodeEditor.selected_title(state))
     |> assign(:pending_output, NodeEditor.pending_output_label(state))
+    |> assign(:zoom_percent, NodeEditor.zoom_percent(state))
   end
 end

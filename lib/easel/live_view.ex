@@ -82,7 +82,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
         end
 
     Available event attributes: `on_click`, `on_mouse_down`, `on_mouse_up`,
-    `on_mouse_move`, `on_key_down`.
+    `on_mouse_move`, `on_wheel`, `on_pinch`, `on_key_down`.
 
     ## Layers
 
@@ -168,6 +168,10 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       * `on_mouse_up` - enable mouseup events (pushes `"\#{id}:mouseup"`)
       * `on_mouse_move` - enable mousemove events (pushes `"\#{id}:mousemove"`)
       * `mouse_move_fps` - optional max rate for mousemove push events (default: frame-synced)
+      * `on_wheel` - enable wheel events (pushes `"\#{id}:wheel"` with deltas)
+      * `wheel_fps` - optional max rate for wheel push events (default: frame-synced)
+      * `on_pinch` - enable touch pinch events (pushes `"\#{id}:pinch"` with scale delta)
+      * `pinch_fps` - optional max rate for pinch push events (default: frame-synced)
       * `on_key_down` - enable keydown events (pushes `"\#{id}:keydown"`)
 
     Any additional attributes are passed through to the `<canvas>` element.
@@ -183,6 +187,10 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
     attr(:on_mouse_up, :boolean, default: false)
     attr(:on_mouse_move, :boolean, default: false)
     attr(:mouse_move_fps, :integer, default: nil)
+    attr(:on_wheel, :boolean, default: false)
+    attr(:wheel_fps, :integer, default: nil)
+    attr(:on_pinch, :boolean, default: false)
+    attr(:pinch_fps, :integer, default: nil)
     attr(:on_key_down, :boolean, default: false)
     attr(:rest, :global)
 
@@ -193,6 +201,8 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
         |> then(fn e -> if assigns.on_mouse_down, do: ["mousedown" | e], else: e end)
         |> then(fn e -> if assigns.on_mouse_up, do: ["mouseup" | e], else: e end)
         |> then(fn e -> if assigns.on_mouse_move, do: ["mousemove" | e], else: e end)
+        |> then(fn e -> if assigns.on_wheel, do: ["wheel" | e], else: e end)
+        |> then(fn e -> if assigns.on_pinch, do: ["pinch" | e], else: e end)
         |> then(fn e -> if assigns.on_key_down, do: ["keydown" | e], else: e end)
 
       assigns = assign(assigns, :events, Phoenix.json_library().encode_to_iodata!(events))
@@ -209,6 +219,8 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
         data-templates={Phoenix.json_library().encode_to_iodata!(@templates)}
         data-events={@events}
         data-mousemove-fps={@mouse_move_fps}
+        data-wheel-fps={@wheel_fps}
+        data-pinch-fps={@pinch_fps}
         {@rest}
       />
       <script :type={ColocatedHook} name=".Easel" runtime>
@@ -223,6 +235,70 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
               x: Math.round(e.clientX - rect.left),
               y: Math.round(e.clientY - rect.top)
             };
+          },
+          touchCenterDistance(t1, t2) {
+            const rect = this.el.getBoundingClientRect();
+            const x1 = t1.clientX - rect.left;
+            const y1 = t1.clientY - rect.top;
+            const x2 = t2.clientX - rect.left;
+            const y2 = t2.clientY - rect.top;
+            const dx = x2 - x1;
+            const dy = y2 - y1;
+            return {
+              x: Math.round((x1 + x2) / 2),
+              y: Math.round((y1 + y2) / 2),
+              dist: Math.hypot(dx, dy)
+            };
+          },
+          queueWheel(payload) {
+            this._wheelLatest = payload;
+
+            if (this._wheelIntervalMs > 0) {
+              if (this._wheelTimeoutId) return;
+
+              this._wheelTimeoutId = setTimeout(() => {
+                this._wheelTimeoutId = null;
+                const data = this._wheelLatest;
+                this._wheelLatest = null;
+                if (data) this.pushEvent(`${this.el.id}:wheel`, data);
+              }, this._wheelIntervalMs);
+
+              return;
+            }
+
+            if (this._wheelRafId) return;
+
+            this._wheelRafId = requestAnimationFrame(() => {
+              this._wheelRafId = null;
+              const data = this._wheelLatest;
+              this._wheelLatest = null;
+              if (data) this.pushEvent(`${this.el.id}:wheel`, data);
+            });
+          },
+          queuePinch(payload) {
+            this._pinchLatest = payload;
+
+            if (this._pinchIntervalMs > 0) {
+              if (this._pinchTimeoutId) return;
+
+              this._pinchTimeoutId = setTimeout(() => {
+                this._pinchTimeoutId = null;
+                const data = this._pinchLatest;
+                this._pinchLatest = null;
+                if (data) this.pushEvent(`${this.el.id}:pinch`, data);
+              }, this._pinchIntervalMs);
+
+              return;
+            }
+
+            if (this._pinchRafId) return;
+
+            this._pinchRafId = requestAnimationFrame(() => {
+              this._pinchRafId = null;
+              const data = this._pinchLatest;
+              this._pinchLatest = null;
+              if (data) this.pushEvent(`${this.el.id}:pinch`, data);
+            });
           },
           executeOps(ops) {
             const ctx = this.context;
@@ -377,9 +453,27 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
             this._mouseMoveRafId = null;
             this._mouseMoveTimeoutId = null;
             this._mouseMoveLatest = null;
+            this._wheelRafId = null;
+            this._wheelTimeoutId = null;
+            this._wheelLatest = null;
+            this._pinchRafId = null;
+            this._pinchTimeoutId = null;
+            this._pinchLatest = null;
+            this._pinchState = null;
+
             const moveFps = parseInt(this.el.dataset.mousemoveFps || "0", 10);
             this._mouseMoveIntervalMs = Number.isFinite(moveFps) && moveFps > 0
               ? Math.max(1, Math.round(1000 / moveFps))
+              : 0;
+
+            const wheelFps = parseInt(this.el.dataset.wheelFps || "0", 10);
+            this._wheelIntervalMs = Number.isFinite(wheelFps) && wheelFps > 0
+              ? Math.max(1, Math.round(1000 / wheelFps))
+              : 0;
+
+            const pinchFps = parseInt(this.el.dataset.pinchFps || "0", 10);
+            this._pinchIntervalMs = Number.isFinite(pinchFps) && pinchFps > 0
+              ? Math.max(1, Math.round(1000 / pinchFps))
               : 0;
             this.drawFromData();
 
@@ -435,6 +529,55 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
                     if (point) this.pushEvent(`${id}:mousemove`, point);
                   });
                 });
+              } else if (eventType === "wheel") {
+                this.el.addEventListener("wheel", (e) => {
+                  e.preventDefault();
+                  const point = this.canvasXY(e);
+                  this.queueWheel({
+                    x: point.x,
+                    y: point.y,
+                    delta_x: e.deltaX,
+                    delta_y: e.deltaY,
+                    delta_z: e.deltaZ,
+                    ctrl: e.ctrlKey,
+                    shift: e.shiftKey,
+                    alt: e.altKey,
+                    meta: e.metaKey
+                  });
+                }, { passive: false });
+              } else if (eventType === "pinch") {
+                this.el.addEventListener("touchstart", (e) => {
+                  if (e.touches.length !== 2) {
+                    this._pinchState = null;
+                    return;
+                  }
+
+                  const data = this.touchCenterDistance(e.touches[0], e.touches[1]);
+                  this._pinchState = { lastDist: data.dist };
+                }, { passive: true });
+
+                this.el.addEventListener("touchmove", (e) => {
+                  if (e.touches.length !== 2) {
+                    this._pinchState = null;
+                    return;
+                  }
+
+                  const data = this.touchCenterDistance(e.touches[0], e.touches[1]);
+                  const prev = this._pinchState && this._pinchState.lastDist;
+                  this._pinchState = { lastDist: data.dist };
+
+                  if (!prev || prev <= 0) return;
+
+                  const scale = data.dist / prev;
+                  if (!Number.isFinite(scale) || Math.abs(scale - 1) < 0.002) return;
+
+                  e.preventDefault();
+                  this.queuePinch({ x: data.x, y: data.y, scale });
+                }, { passive: false });
+
+                const resetPinch = () => { this._pinchState = null; };
+                this.el.addEventListener("touchend", resetPinch, { passive: true });
+                this.el.addEventListener("touchcancel", resetPinch, { passive: true });
               } else {
                 this.el.addEventListener(eventType, (e) => {
                   this.pushEvent(`${id}:${eventType}`, this.canvasXY(e));
@@ -450,8 +593,15 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
             if (this._rafId) cancelAnimationFrame(this._rafId);
             if (this._mouseMoveRafId) cancelAnimationFrame(this._mouseMoveRafId);
             if (this._mouseMoveTimeoutId) clearTimeout(this._mouseMoveTimeoutId);
+            if (this._wheelRafId) cancelAnimationFrame(this._wheelRafId);
+            if (this._wheelTimeoutId) clearTimeout(this._wheelTimeoutId);
+            if (this._pinchRafId) cancelAnimationFrame(this._pinchRafId);
+            if (this._pinchTimeoutId) clearTimeout(this._pinchTimeoutId);
             this._pendingCommands = [];
             this._mouseMoveLatest = null;
+            this._wheelLatest = null;
+            this._pinchLatest = null;
+            this._pinchState = null;
           }
         }
       </script>
@@ -565,8 +715,10 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       * `id` (required) — unique DOM id for this layer's canvas
       * `ops` — list of drawing operations
       * `templates` — map of template definitions (for instance rendering)
-      * `on_click`, `on_mouse_down`, `on_mouse_up`, `on_mouse_move`, `on_key_down` — event flags
+      * `on_click`, `on_mouse_down`, `on_mouse_up`, `on_mouse_move`, `on_wheel`, `on_pinch`, `on_key_down` — event flags
       * `mouse_move_fps` — optional max rate for mousemove push events on this layer
+      * `wheel_fps` — optional max rate for wheel push events on this layer
+      * `pinch_fps` — optional max rate for pinch push events on this layer
 
     Only the topmost layer with event flags will receive pointer events.
     Lower layers have `pointer-events: none` by default.
@@ -586,6 +738,10 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       attr(:on_mouse_up, :boolean)
       attr(:on_mouse_move, :boolean)
       attr(:mouse_move_fps, :integer)
+      attr(:on_wheel, :boolean)
+      attr(:wheel_fps, :integer)
+      attr(:on_pinch, :boolean)
+      attr(:pinch_fps, :integer)
       attr(:on_key_down, :boolean)
     end
 
@@ -601,6 +757,8 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
               Map.get(layer, :on_mouse_down, false) or
               Map.get(layer, :on_mouse_up, false) or
               Map.get(layer, :on_mouse_move, false) or
+              Map.get(layer, :on_wheel, false) or
+              Map.get(layer, :on_pinch, false) or
               Map.get(layer, :on_key_down, false)
 
           pe = if has_events and not found_top, do: "auto", else: "none"
@@ -624,6 +782,10 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
           on_mouse_up={Map.get(layer, :on_mouse_up, false)}
           on_mouse_move={Map.get(layer, :on_mouse_move, false)}
           mouse_move_fps={Map.get(layer, :mouse_move_fps, nil)}
+          on_wheel={Map.get(layer, :on_wheel, false)}
+          wheel_fps={Map.get(layer, :wheel_fps, nil)}
+          on_pinch={Map.get(layer, :on_pinch, false)}
+          pinch_fps={Map.get(layer, :pinch_fps, nil)}
           on_key_down={Map.get(layer, :on_key_down, false)}
         />
       </div>

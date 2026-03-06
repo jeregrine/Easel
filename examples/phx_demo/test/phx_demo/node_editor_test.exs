@@ -103,6 +103,16 @@ defmodule PhxDemo.NodeEditorTest do
     assert {510, 230} in active_points(canvas)
   end
 
+  test "zooming keeps cursor anchor stable for picking" do
+    state =
+      NodeEditor.init()
+      |> NodeEditor.zoom_wheel(280.0, 230.0, -240.0)
+      |> NodeEditor.mouse_down(280.0, 230.0)
+
+    assert NodeEditor.zoom_percent(state) > 100
+    assert %{dragging_endpoint: :from, from: nil, to: {:set_color, 0}} = state.pending_link
+  end
+
   test "dragging link end can reconnect by clicking another input" do
     state =
       NodeEditor.init()
