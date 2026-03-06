@@ -1035,8 +1035,7 @@ defmodule Easel.Terminal do
 
   defp pixel_rgb(rgb, width, x, y) do
     offset = (y * width + x) * 3
-    <<r, g, b>> = :binary.part(rgb, offset, 3)
-    {r, g, b}
+    {:binary.at(rgb, offset), :binary.at(rgb, offset + 1), :binary.at(rgb, offset + 2)}
   end
 
   defp luma(r, g, b) do
