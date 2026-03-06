@@ -1127,7 +1127,7 @@ defmodule Easel.Terminal do
          color_mode,
          contrast_profile
        ) do
-    Enum.reduce(0..(glyph_h - 1), %{}, fn gy, acc ->
+    Enum.reduce(0..(glyph_h - 1), [], fn gy, acc ->
       py = elem(y_samples, gy)
 
       Enum.reduce(0..(glyph_w - 1), acc, fn gx, acc2 ->
@@ -1137,17 +1137,22 @@ defmodule Easel.Terminal do
           pixel_rgb(rgb, src_w, px, py)
           |> adjust_rgb_for_theme(contrast_profile)
 
-        brightness = luma(r, g, b) / 255
-
-        if brightness <= bg_threshold do
+        if luma(r, g, b) / 255 <= bg_threshold do
           acc2
         else
           bit_index = gy * glyph_w + gx
           plane_key = if color_mode == :ansi256, do: rgb_to_ansi256(r, g, b), else: :mono
-          Map.update(acc2, plane_key, 1 <<< bit_index, &(&1 ||| 1 <<< bit_index))
+          upsert_plane_mask(acc2, plane_key, 1 <<< bit_index)
         end
       end)
     end)
+  end
+
+  defp upsert_plane_mask(plane_masks, plane_key, bit) do
+    case List.keytake(plane_masks, plane_key, 0) do
+      {{^plane_key, mask}, rest} -> [{plane_key, mask ||| bit} | rest]
+      nil -> [{plane_key, bit} | plane_masks]
+    end
   end
 
   defp select_best_plane_char(plane_masks, glyph_profile, mask_cache) do
