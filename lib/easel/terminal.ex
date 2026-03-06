@@ -1191,7 +1191,8 @@ defmodule Easel.Terminal do
         true = :ets.insert(table, {key, value})
 
         if :ets.info(table, :size) > limit do
-          :ets.delete_all_objects(table)
+          prune_ets_table(table, max(div(limit, 4), 1))
+          true = :ets.insert(table, {key, value})
         end
 
         value
@@ -1475,7 +1476,7 @@ defmodule Easel.Terminal do
 
   defp maybe_trim_glyph_profile_cache(table, key, profile) do
     if :ets.info(table, :size) > @glyph_profile_cache_limit do
-      :ets.delete_all_objects(table)
+      prune_ets_table(table, max(div(@glyph_profile_cache_limit, 4), 1))
       true = :ets.insert(table, {key, profile})
     end
 
