@@ -43,8 +43,8 @@ defmodule Easel.Terminal do
 
   ## Options
 
-    * `:charset` - set a manual luma ramp string, `:auto` (default) for silhouette fitting, or `:braille` for a fast braille renderer
-    * `:mode` - explicitly choose `:luma`, `:silhouette`, `:braille`, or `:halfblock` (optional)
+    * `:charset` - manual luma ramp string for `:luma` mode
+    * `:mode` - explicitly choose `:luma`, `:silhouette`, `:braille`, or `:halfblock`
     * `:invert` - invert luma ramp mapping (only for manual charset mode, default `false`)
     * `:fit` - `:contain` (default) or `:fill`
     * `:cell_aspect` - character cell height/width ratio (default `2.0`)
@@ -648,17 +648,19 @@ defmodule Easel.Terminal do
   end
 
   defp render_mode(opts) do
-    case Keyword.get(opts, :mode) do
-      mode when mode in [:luma, :silhouette, :braille, :halfblock] ->
+    case Keyword.fetch(opts, :mode) do
+      {:ok, mode} when mode in [:luma, :silhouette, :braille, :halfblock] ->
         mode
 
-      _ ->
-        case Keyword.get(opts, :charset, :auto) do
-          :auto -> :silhouette
-          nil -> :silhouette
-          :braille -> :braille
-          :halfblock -> :halfblock
-          _ -> :luma
+      {:ok, mode} ->
+        raise ArgumentError,
+              "invalid terminal render mode #{inspect(mode)}. Expected one of :luma, :silhouette, :braille, :halfblock"
+
+      :error ->
+        if Keyword.has_key?(opts, :charset) do
+          :luma
+        else
+          :silhouette
         end
     end
   end

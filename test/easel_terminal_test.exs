@@ -46,6 +46,27 @@ defmodule EaselTerminalTest do
       assert frame =~ "\e[0m"
     end
 
+    test "mode takes precedence over charset" do
+      image = %{width: 1, height: 1, rgb: <<255, 255, 255>>}
+
+      assert Easel.Terminal.frame_from_rgb(image, 1, 1, mode: :braille, charset: " @", fit: :fill) ==
+               "⣿"
+    end
+
+    test "charset implies luma mode when mode is omitted" do
+      image = %{width: 1, height: 1, rgb: <<255, 255, 255>>}
+
+      assert Easel.Terminal.frame_from_rgb(image, 1, 1, charset: " @", fit: :fill) == "@"
+    end
+
+    test "invalid mode raises" do
+      image = %{width: 1, height: 1, rgb: <<255, 255, 255>>}
+
+      assert_raise ArgumentError, ~r/invalid terminal render mode/, fn ->
+        Easel.Terminal.frame_from_rgb(image, 1, 1, mode: :wat)
+      end
+    end
+
     test "auto contrast can lift dark pixels on dark themes" do
       image = %{width: 1, height: 1, rgb: <<0, 0, 0>>}
 
