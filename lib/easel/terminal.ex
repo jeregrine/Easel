@@ -98,6 +98,7 @@ defmodule Easel.Terminal do
       ensure_tty_available!()
 
       with_terminal(opts, fn term ->
+        term = refresh_terminal_size(term, opts)
         {term, cols, rows} = terminal_grid(term, opts)
         frame = canvas_to_frame(canvas, cols, rows, nil, nil, opts)
         term = draw_frame(term, frame)
@@ -135,6 +136,7 @@ defmodule Easel.Terminal do
       interval_ms = animation_interval_ms(opts)
 
       with_terminal(opts, fn term ->
+        term = refresh_terminal_size(term, opts)
         animate_loop(term, width, height, state, fun, opts, interval_ms)
       end)
     end
@@ -253,13 +255,6 @@ defmodule Easel.Terminal do
     end
 
     defp terminal_grid(term, opts) do
-      term =
-        if Keyword.has_key?(opts, :columns) and Keyword.has_key?(opts, :rows) do
-          term
-        else
-          t_resize(term)
-        end
-
       size = Map.get(term, :size) || %{}
       term_cols = Map.get(size, :width) || 80
       term_rows = Map.get(size, :height) || 24
@@ -275,6 +270,14 @@ defmodule Easel.Terminal do
         |> normalize_positive_int(24)
 
       {term, columns, rows}
+    end
+
+    defp refresh_terminal_size(term, opts) do
+      if Keyword.has_key?(opts, :columns) and Keyword.has_key?(opts, :rows) do
+        term
+      else
+        t_resize(term)
+      end
     end
 
     defp canvas_to_frame(canvas, columns, rows, fallback_width, fallback_height, opts) do
