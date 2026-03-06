@@ -101,10 +101,10 @@ defmodule Easel.Terminal do
         term = refresh_terminal_size(term, opts)
         {term, cols, rows} = terminal_grid(term, opts)
         frame = canvas_to_frame(canvas, cols, rows, nil, nil, opts)
-        term = draw_frame(term, frame)
+        {term, frame_state} = draw_frame(term, frame)
 
         if Keyword.get(opts, :wait, true) do
-          wait_for_quit(term, canvas, opts)
+          wait_for_quit(term, canvas, frame_state, opts)
         else
           :ok
         end
@@ -137,7 +137,7 @@ defmodule Easel.Terminal do
 
       with_terminal(opts, fn term ->
         term = refresh_terminal_size(term, opts)
-        animate_loop(term, width, height, state, fun, opts, interval_ms)
+        animate_loop(term, width, height, state, fun, opts, interval_ms, nil)
       end)
     end
 
@@ -157,11 +157,11 @@ defmodule Easel.Terminal do
       end
     end
 
-    defp animate_loop(term, width, height, state, fun, opts, interval_ms) do
+    defp animate_loop(term, width, height, state, fun, opts, interval_ms, previous_frame) do
       {canvas, next_state} = fun.(state)
       {term, cols, rows} = terminal_grid(term, opts)
       frame = canvas_to_frame(canvas, cols, rows, width, height, opts)
-      term = draw_frame(term, frame)
+      {term, previous_frame} = draw_frame(term, frame, previous_frame)
 
       deadline = now_ms() + interval_ms
 
@@ -170,7 +170,7 @@ defmodule Easel.Terminal do
           :ok
 
         {:cont, term, state} ->
-          animate_loop(term, width, height, state, fun, opts, interval_ms)
+          animate_loop(term, width, height, state, fun, opts, interval_ms, previous_frame)
       end
     end
 
@@ -204,17 +204,17 @@ defmodule Easel.Terminal do
       end
     end
 
-    defp wait_for_quit(term, canvas, opts) do
+    defp wait_for_quit(term, canvas, previous_frame, opts) do
       case t_poll_event(term, 50) do
         :timeout ->
-          wait_for_quit(term, canvas, opts)
+          wait_for_quit(term, canvas, previous_frame, opts)
 
         {:signal, :winch} ->
           term = refresh_terminal_size(term, opts)
           {term, cols, rows} = terminal_grid(term, opts)
           frame = canvas_to_frame(canvas, cols, rows, nil, nil, opts)
-          term = draw_frame(term, frame)
-          wait_for_quit(term, canvas, opts)
+          {term, previous_frame} = draw_frame(term, frame, previous_frame)
+          wait_for_quit(term, canvas, previous_frame, opts)
 
         {:data, data} ->
           key_event = key_event_from_data(data)
@@ -223,11 +223,11 @@ defmodule Easel.Terminal do
           if quit_key?(key_event) do
             :ok
           else
-            wait_for_quit(term, canvas, opts)
+            wait_for_quit(term, canvas, previous_frame, opts)
           end
 
         _other ->
-          wait_for_quit(term, canvas, opts)
+          wait_for_quit(term, canvas, previous_frame, opts)
       end
     end
 
@@ -251,10 +251,50 @@ defmodule Easel.Terminal do
       end
     end
 
-    defp draw_frame(term, frame) do
-      term
-      |> t_cursor_position(1, 1)
-      |> t_write(frame)
+    defp draw_frame(term, frame), do: draw_frame(term, frame, nil)
+
+    defp draw_frame(term, frame, nil) do
+      term =
+        term
+        |> t_cursor_position(1, 1)
+        |> t_write(frame)
+
+      {term, frame_state(frame)}
+    end
+
+    defp draw_frame(term, frame, %{frame: frame} = previous_frame) do
+      {term, previous_frame}
+    end
+
+    defp draw_frame(term, frame, previous_frame) do
+      current_frame = frame_state(frame)
+
+      term =
+        if current_frame.line_count != previous_frame.line_count do
+          term
+          |> t_cursor_position(1, 1)
+          |> t_write(frame)
+        else
+          Enum.reduce(0..(current_frame.line_count - 1), term, fn line_idx, term_acc ->
+            current_line = elem(current_frame.lines, line_idx)
+            previous_line = elem(previous_frame.lines, line_idx)
+
+            if current_line == previous_line do
+              term_acc
+            else
+              term_acc
+              |> t_cursor_position(1, line_idx + 1)
+              |> t_write(current_line)
+            end
+          end)
+        end
+
+      {term, current_frame}
+    end
+
+    defp frame_state(frame) do
+      lines = :binary.split(frame, "\n", [:global])
+      %{frame: frame, lines: List.to_tuple(lines), line_count: length(lines)}
     end
 
     defp terminal_grid(term, opts) do
