@@ -117,7 +117,7 @@ defmodule Easel.TermShowreel do
           )
 
           unless quit_requested?() do
-            draw_title_card(stage, "Showreel complete", "Recorded at #{bpm} BPM", 900)
+            draw_final_title_card(stage, beats_to_ms(8, bpm))
           end
         catch
           :showreel_quit -> :ok
@@ -371,7 +371,7 @@ defmodule Easel.TermShowreel do
         :boids_state,
         "Boids",
         :luma,
-        16,
+        12,
         24,
         &__MODULE__.Demos.boids_init/1,
         &__MODULE__.Demos.boids_frame/2,
@@ -535,6 +535,10 @@ defmodule Easel.TermShowreel do
     IO.write(["\e[H", frame, "\n", footer_1, "\n", footer_2])
   end
 
+  defp draw_fullscreen_frame(frame) do
+    IO.write(["\e[H", frame])
+  end
+
   defp footer(
          stage,
          segment,
@@ -570,8 +574,9 @@ defmodule Easel.TermShowreel do
     [line_1, line_2]
   end
 
-  defp draw_title_card(stage, title, subtitle, duration_ms) do
-    draw_status_card(stage, title, subtitle, footer_title: "Finished")
+  defp draw_final_title_card(stage, duration_ms) do
+    frame = final_title_frame(stage)
+    draw_fullscreen_frame(frame)
     Process.sleep(duration_ms)
   end
 
@@ -684,6 +689,47 @@ defmodule Easel.TermShowreel do
        do: __MODULE__.Demos.add_boids_center(state, count)
 
   defp maybe_apply_segment_start_effect(state, _segment), do: state
+
+  defp final_title_frame(stage) do
+    line =
+      IO.iodata_to_binary([
+        "\e[48;5;57m",
+        String.duplicate(" ", stage.cols),
+        IO.ANSI.reset()
+      ])
+
+    frame =
+      1..stage.rows
+      |> Enum.map(fn _ -> line end)
+      |> Enum.join("\n")
+
+    title_y = max(div(stage.rows * 50, 100), 3)
+    subtitle_y = max(div(stage.rows * 56, 100), 5)
+    now_y = max(div(stage.rows * 62, 100), 7)
+
+    [
+      frame,
+      direct_text(stage.cols, title_y, "EASEL"),
+      direct_text(stage.cols, subtitle_y, "Canvas in your terminal"),
+      direct_text(stage.cols, now_y, "NOW!")
+    ]
+    |> IO.iodata_to_binary()
+  end
+
+  defp direct_text(cols, row, text) do
+    col = max(div(cols - String.length(text), 2), 0) + 1
+
+    [
+      "\e[",
+      Integer.to_string(row),
+      ";",
+      Integer.to_string(col),
+      "H",
+      "\e[38;5;230;1m",
+      text,
+      IO.ANSI.reset()
+    ]
+  end
 
   defp canvas_to_frame(canvas, stage, segment) do
     image =
