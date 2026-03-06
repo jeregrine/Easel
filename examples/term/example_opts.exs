@@ -1,5 +1,5 @@
 defmodule TermExampleOpts do
-  @valid_modes ~w(auto luma silhouette braille)
+  @valid_modes ~w(auto luma silhouette braille halfblock)
 
   def merge_terminal_mode(opts) do
     case terminal_mode() do
@@ -31,4 +31,5 @@ defmodule TermExampleOpts do
   defp parse_mode("luma"), do: :luma
   defp parse_mode("silhouette"), do: :silhouette
   defp parse_mode("braille"), do: :braille
+  defp parse_mode("halfblock"), do: :halfblock
 end

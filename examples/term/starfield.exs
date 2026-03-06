@@ -1,5 +1,5 @@
 # Starfield — random stars with varying sizes and brightness
-# Run: mix run examples/term/starfield.exs [--mode auto|luma|silhouette|braille]
+# Run: mix run examples/term/starfield.exs [--mode auto|luma|silhouette|braille|halfblock]
 
 Code.require_file("example_opts.exs", __DIR__)
 

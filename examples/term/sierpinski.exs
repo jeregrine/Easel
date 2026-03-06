@@ -1,5 +1,5 @@
 # Sierpinski triangle fractal
-# Run: mix run examples/term/sierpinski.exs [--mode auto|luma|silhouette|braille]
+# Run: mix run examples/term/sierpinski.exs [--mode auto|luma|silhouette|braille|halfblock]
 
 Code.require_file("example_opts.exs", __DIR__)
 

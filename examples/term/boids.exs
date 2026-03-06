@@ -1,5 +1,5 @@
 # Boids flocking simulation
-# Run: mix run examples/term/boids.exs [--mode auto|luma|silhouette|braille]
+# Run: mix run examples/term/boids.exs [--mode auto|luma|silhouette|braille|halfblock]
 #
 # Uses Easel.Terminal.animate/5 to run in the terminal.
 

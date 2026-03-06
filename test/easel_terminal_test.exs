@@ -103,6 +103,38 @@ defmodule EaselTerminalTest do
       assert frame =~ "\e[0m"
     end
 
+    test "halfblock mode renders upper and lower blocks" do
+      top_white_bottom_black = %{width: 1, height: 2, rgb: <<255, 255, 255, 0, 0, 0>>}
+      bottom_white_top_black = %{width: 1, height: 2, rgb: <<0, 0, 0, 255, 255, 255>>}
+      both_white = %{width: 1, height: 2, rgb: <<255, 255, 255, 255, 255, 255>>}
+
+      assert Easel.Terminal.frame_from_rgb(top_white_bottom_black, 1, 1,
+               mode: :halfblock,
+               fit: :fill
+             ) ==
+               "▀"
+
+      assert Easel.Terminal.frame_from_rgb(bottom_white_top_black, 1, 1,
+               mode: :halfblock,
+               fit: :fill
+             ) ==
+               "▄"
+
+      assert Easel.Terminal.frame_from_rgb(both_white, 1, 1, mode: :halfblock, fit: :fill) == "█"
+    end
+
+    test "halfblock mode supports ansi256 foreground and background" do
+      image = %{width: 1, height: 2, rgb: <<255, 0, 0, 0, 0, 255>>}
+
+      frame =
+        Easel.Terminal.frame_from_rgb(image, 1, 1, mode: :halfblock, color: :ansi256, fit: :fill)
+
+      assert frame =~ "\e[38;5;"
+      assert frame =~ "\e[48;5;"
+      assert frame =~ "▀"
+      assert frame =~ "\e[0m"
+    end
+
     test "auto silhouette mode renders background as space" do
       if Easel.WX.available?() do
         image = %{width: 9, height: 19, rgb: :binary.copy(<<0, 0, 0>>, 9 * 19)}

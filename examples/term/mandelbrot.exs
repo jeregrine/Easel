@@ -1,5 +1,5 @@
 # Mandelbrot set rendered pixel-by-pixel
-# Run: mix run examples/term/mandelbrot.exs [--mode auto|luma|silhouette|braille]
+# Run: mix run examples/term/mandelbrot.exs [--mode auto|luma|silhouette|braille|halfblock]
 
 Code.require_file("example_opts.exs", __DIR__)
 

@@ -44,7 +44,7 @@ defmodule Easel.Terminal do
   ## Options
 
     * `:charset` - set a manual luma ramp string, `:auto` (default) for silhouette fitting, or `:braille` for a fast braille renderer
-    * `:mode` - explicitly choose `:luma`, `:silhouette`, or `:braille` (optional)
+    * `:mode` - explicitly choose `:luma`, `:silhouette`, `:braille`, or `:halfblock` (optional)
     * `:invert` - invert luma ramp mapping (only for manual charset mode, default `false`)
     * `:fit` - `:contain` (default) or `:fill`
     * `:cell_aspect` - character cell height/width ratio (default `2.0`)
@@ -77,6 +77,9 @@ defmodule Easel.Terminal do
 
       :braille ->
         frame_from_rgb_braille(%{width: width, height: height, rgb: rgb}, columns, rows, opts)
+
+      :halfblock ->
+        frame_from_rgb_halfblock(%{width: width, height: height, rgb: rgb}, columns, rows, opts)
 
       :luma ->
         frame_from_rgb_luma(%{width: width, height: height, rgb: rgb}, columns, rows, opts)
@@ -646,7 +649,7 @@ defmodule Easel.Terminal do
 
   defp render_mode(opts) do
     case Keyword.get(opts, :mode) do
-      mode when mode in [:luma, :silhouette, :braille] ->
+      mode when mode in [:luma, :silhouette, :braille, :halfblock] ->
         mode
 
       _ ->
@@ -654,6 +657,7 @@ defmodule Easel.Terminal do
           :auto -> :silhouette
           nil -> :silhouette
           :braille -> :braille
+          :halfblock -> :halfblock
           _ -> :luma
         end
     end
@@ -725,6 +729,41 @@ defmodule Easel.Terminal do
     }
 
     lines = for row <- 0..(rows - 1), do: render_braille_line(row, render_opts)
+
+    lines
+    |> Enum.intersperse("\n")
+    |> IO.iodata_to_binary()
+  end
+
+  defp frame_from_rgb_halfblock(%{width: width, height: height, rgb: rgb}, columns, rows, opts) do
+    fit = Keyword.get(opts, :fit, :contain)
+    color_mode = Keyword.get(opts, :color, :none)
+    cell_aspect = cell_aspect(opts)
+
+    bg_threshold =
+      opts
+      |> Keyword.get(:background_threshold, @default_bg_threshold)
+      |> normalize_ratio(@default_bg_threshold)
+
+    contrast_profile = contrast_profile(opts, color_mode)
+    geometry = fit_geometry(width, height, columns, rows, cell_aspect, fit)
+    sample_maps = halfblock_sample_maps(geometry, width, height)
+
+    render_opts = %{
+      columns: columns,
+      src_w: width,
+      rgb: rgb,
+      color_mode: color_mode,
+      draw_cols: geometry.draw_cols,
+      draw_rows: geometry.draw_rows,
+      off_x: geometry.off_x,
+      off_y: geometry.off_y,
+      bg_threshold: bg_threshold,
+      contrast_profile: contrast_profile,
+      sample_maps: sample_maps
+    }
+
+    lines = for row <- 0..(rows - 1), do: render_halfblock_line(row, render_opts)
 
     lines
     |> Enum.intersperse("\n")
@@ -832,6 +871,13 @@ defmodule Easel.Terminal do
     %{
       x: sample_axis_map(geometry.src_x0, geometry.src_x1, src_w, geometry.draw_cols, 2),
       y: sample_axis_map(geometry.src_y0, geometry.src_y1, src_h, geometry.draw_rows, 4)
+    }
+  end
+
+  defp halfblock_sample_maps(geometry, src_w, src_h) do
+    %{
+      x: sample_axis_map(geometry.src_x0, geometry.src_x1, src_w, geometry.draw_cols, 1),
+      y: sample_axis_map(geometry.src_y0, geometry.src_y1, src_h, geometry.draw_rows, 2)
     }
   end
 
@@ -989,6 +1035,60 @@ defmodule Easel.Terminal do
     end
   end
 
+  defp render_halfblock_line(row, opts) do
+    %{
+      columns: columns,
+      src_w: src_w,
+      rgb: rgb,
+      color_mode: color_mode,
+      draw_cols: draw_cols,
+      draw_rows: draw_rows,
+      off_x: off_x,
+      off_y: off_y,
+      bg_threshold: bg_threshold,
+      contrast_profile: contrast_profile,
+      sample_maps: sample_maps
+    } = opts
+
+    {line, current_colors} =
+      Enum.map_reduce(0..(columns - 1), nil, fn col, current_colors ->
+        inside? =
+          col >= off_x and col < off_x + draw_cols and
+            row >= off_y and row < off_y + draw_rows
+
+        if inside? do
+          rel_col = col - off_x
+          rel_row = row - off_y
+
+          x_samples = elem(sample_maps.x, rel_col)
+          y_samples = elem(sample_maps.y, rel_row)
+
+          {ch, fg_code, bg_code} =
+            halfblock_cell(
+              rgb,
+              src_w,
+              x_samples,
+              y_samples,
+              bg_threshold,
+              color_mode,
+              contrast_profile
+            )
+
+          render_dual_color_cell(ch, fg_code, bg_code, current_colors, color_mode)
+        else
+          render_dual_color_cell(" ", nil, nil, current_colors, color_mode)
+        end
+      end)
+
+    case {color_mode, current_colors} do
+      {:ansi256, {_fg, _bg}} ->
+        [line, "\e[0m"]
+
+      _ ->
+        line
+    end
+  end
+
   defp render_braille_line(row, opts) do
     %{
       columns: columns,
@@ -1102,6 +1202,83 @@ defmodule Easel.Terminal do
 
       _ ->
         line
+    end
+  end
+
+  defp halfblock_cell(
+         rgb,
+         src_w,
+         x_samples,
+         y_samples,
+         bg_threshold,
+         color_mode,
+         contrast_profile
+       ) do
+    top =
+      halfblock_region_color(
+        rgb,
+        src_w,
+        x_samples,
+        elem(y_samples, 0),
+        bg_threshold,
+        contrast_profile
+      )
+
+    bottom =
+      halfblock_region_color(
+        rgb,
+        src_w,
+        x_samples,
+        elem(y_samples, 1),
+        bg_threshold,
+        contrast_profile
+      )
+
+    case {top, bottom, color_mode} do
+      {nil, nil, _} ->
+        {" ", nil, nil}
+
+      {{r, g, b}, nil, :ansi256} ->
+        {"▀", rgb_to_ansi256(r, g, b), nil}
+
+      {nil, {r, g, b}, :ansi256} ->
+        {"▄", rgb_to_ansi256(r, g, b), nil}
+
+      {{rt, gt, bt}, {rb, gb, bb}, :ansi256} ->
+        {"▀", rgb_to_ansi256(rt, gt, bt), rgb_to_ansi256(rb, gb, bb)}
+
+      {_top, nil, _} ->
+        {"▀", nil, nil}
+
+      {nil, _bottom, _} ->
+        {"▄", nil, nil}
+
+      {_top, _bottom, _} ->
+        {"█", nil, nil}
+    end
+  end
+
+  defp halfblock_region_color(rgb, src_w, x_samples, py, bg_threshold, contrast_profile) do
+    {r_sum, g_sum, b_sum, count} =
+      Enum.reduce(0..(tuple_size(x_samples) - 1), {0, 0, 0, 0}, fn x_idx,
+                                                                   {r_acc, g_acc, b_acc, n_acc} ->
+        px = elem(x_samples, x_idx)
+
+        {r, g, b} =
+          pixel_rgb(rgb, src_w, px, py)
+          |> adjust_rgb_for_theme(contrast_profile)
+
+        if luma(r, g, b) / 255 <= bg_threshold do
+          {r_acc, g_acc, b_acc, n_acc}
+        else
+          {r_acc + r, g_acc + g, b_acc + b, n_acc + 1}
+        end
+      end)
+
+    if count == 0 do
+      nil
+    else
+      {round(r_sum / count), round(g_sum / count), round(b_sum / count)}
     end
   end
 
@@ -1256,6 +1433,31 @@ defmodule Easel.Terminal do
       idx ->
         {elem(glyph_profile.chars, idx), elem(glyph_profile.white_counts, idx)}
     end
+  end
+
+  defp render_dual_color_cell(ch, fg_code, bg_code, current_colors, :ansi256) do
+    new_colors = {fg_code, bg_code}
+
+    cond do
+      current_colors == new_colors ->
+        {ch, current_colors}
+
+      fg_code == nil and bg_code == nil ->
+        {["\e[0m", ch], nil}
+
+      true ->
+        fg_ansi =
+          if is_integer(fg_code), do: ["\e[38;5;", Integer.to_string(fg_code), "m"], else: []
+
+        bg_ansi =
+          if is_integer(bg_code), do: ["\e[48;5;", Integer.to_string(bg_code), "m"], else: []
+
+        {["\e[0m", fg_ansi, bg_ansi, ch], new_colors}
+    end
+  end
+
+  defp render_dual_color_cell(ch, _fg_code, _bg_code, current_colors, _color_mode) do
+    {ch, current_colors}
   end
 
   defp render_cell_with_ansi(ch, code, current_color, :ansi256) do
