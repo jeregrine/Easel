@@ -158,8 +158,12 @@ defmodule Easel.WX do
   defp parse_rgba(str) do
     case Regex.run(~r/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([\d.]+)\s*\)/, str) do
       [_, r, g, b, a] ->
-        {String.to_integer(r), String.to_integer(g), String.to_integer(b),
-         round(String.to_float(normalize_float(a)) * 255)}
+        {
+          clamp(String.to_integer(r), 0, 255),
+          clamp(String.to_integer(g), 0, 255),
+          clamp(String.to_integer(b), 0, 255),
+          round(clamp(String.to_float(normalize_float(a)), 0.0, 1.0) * 255)
+        }
 
       _ ->
         {0, 0, 0, 255}
@@ -169,7 +173,12 @@ defmodule Easel.WX do
   defp parse_rgb(str) do
     case Regex.run(~r/rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/, str) do
       [_, r, g, b] ->
-        {String.to_integer(r), String.to_integer(g), String.to_integer(b), 255}
+        {
+          clamp(String.to_integer(r), 0, 255),
+          clamp(String.to_integer(g), 0, 255),
+          clamp(String.to_integer(b), 0, 255),
+          255
+        }
 
       _ ->
         {0, 0, 0, 255}
@@ -183,7 +192,12 @@ defmodule Easel.WX do
   defp parse_hsl(str) do
     case Regex.run(~r/hsl\(\s*([\d.]+)\s*,\s*([\d.]+)%\s*,\s*([\d.]+)%\s*\)/, str) do
       [_, h, s, l] ->
-        hsl_to_rgb(parse_number(h), parse_number(s) / 100, parse_number(l) / 100, 255)
+        hsl_to_rgb(
+          parse_number(h),
+          clamp(parse_number(s) / 100, 0.0, 1.0),
+          clamp(parse_number(l) / 100, 0.0, 1.0),
+          255
+        )
 
       _ ->
         {0, 0, 0, 255}
@@ -198,9 +212,9 @@ defmodule Easel.WX do
       [_, h, s, l, a] ->
         hsl_to_rgb(
           parse_number(h),
-          parse_number(s) / 100,
-          parse_number(l) / 100,
-          round(parse_number(a) * 255)
+          clamp(parse_number(s) / 100, 0.0, 1.0),
+          clamp(parse_number(l) / 100, 0.0, 1.0),
+          round(clamp(parse_number(a), 0.0, 1.0) * 255)
         )
 
       _ ->
@@ -215,6 +229,10 @@ defmodule Easel.WX do
       String.to_integer(s) * 1.0
     end
   end
+
+  defp clamp(value, min, _max) when value < min, do: min
+  defp clamp(value, _min, max) when value > max, do: max
+  defp clamp(value, _min, _max), do: value
 
   defp hsl_to_rgb(h, s, l, a) do
     h = h / 360.0
@@ -575,9 +593,9 @@ defmodule Easel.WX do
 
       :wx.batch(fn ->
         frame_style =
-          Bitwise.bxor(
+          Bitwise.band(
             @wx_default_frame_style,
-            @wx_resize_border
+            Bitwise.bnot(@wx_resize_border)
           )
 
         frame = :wxFrame.new(:wx.null(), @wx_id_any, title, style: frame_style)
@@ -594,22 +612,22 @@ defmodule Easel.WX do
         dpr = :wxWindow.getContentScaleFactor(frame)
         bitmap = :wxBitmap.new(round(width * dpr), round(height * dpr))
 
-        :wxFrame.connect(panel, :paint, [:callback])
+        :wxPanel.connect(panel, :paint, [:callback])
         :wxFrame.connect(frame, :close_window)
 
-        # Connect mouse events if any handlers are registered
-        if map_size(event_handlers) > 0 do
-          :wxPanel.connect(panel, :left_down)
-          :wxPanel.connect(panel, :left_up)
-          :wxPanel.connect(panel, :motion)
-          :wxPanel.connect(panel, :key_down)
-        end
+        if Map.has_key?(event_handlers, :on_mouse_down), do: :wxPanel.connect(panel, :left_down)
+
+        if Map.has_key?(event_handlers, :on_mouse_up) or Map.has_key?(event_handlers, :on_click),
+          do: :wxPanel.connect(panel, :left_up)
+
+        if Map.has_key?(event_handlers, :on_mouse_move), do: :wxPanel.connect(panel, :motion)
+        if Map.has_key?(event_handlers, :on_key_down), do: :wxPanel.connect(panel, :key_down)
 
         :wxFrame.setClientSize(frame, {width, height})
 
         sizer = :wxBoxSizer.new(@wx_vertical)
         :wxSizer.add(sizer, panel, flag: @wx_expand, proportion: 1)
-        :wxPanel.setSizer(panel, sizer)
+        :wxFrame.setSizer(frame, sizer)
         :wxSizer.layout(sizer)
 
         frame_size = :wxFrame.getSize(frame)
@@ -618,6 +636,10 @@ defmodule Easel.WX do
 
         :wxFrame.center(frame)
         :wxFrame.show(frame)
+
+        if Map.has_key?(event_handlers, :on_key_down) do
+          :wxWindow.setFocus(panel)
+        end
 
         if animate_fn do
           Process.send_after(self(), :tick, interval)
@@ -646,14 +668,7 @@ defmodule Easel.WX do
 
     @impl true
     def handle_sync_event(wx(event: wxPaint()), _paint_event, state) do
-      try do
-        paint(state)
-      rescue
-        e ->
-          IO.puts("PAINT ERROR: #{Exception.message(e)}")
-          IO.puts(Exception.format_stacktrace(__STACKTRACE__))
-      end
-
+      paint(state)
       :ok
     end
 
@@ -715,7 +730,7 @@ defmodule Easel.WX do
       canvas = prepare_canvas(canvas)
       new_state = %{state | ops: canvas.ops, animate_state: new_animate_state}
 
-      :wxFrame.refresh(state.frame, eraseBackground: false)
+      :wxPanel.refresh(state.panel, eraseBackground: false)
 
       if state.animate_fn, do: Process.send_after(self(), :tick, state.interval || 16)
 
@@ -869,7 +884,7 @@ defmodule Easel.WX do
 
     defp execute_op(["save", []], state) do
       transform = :wxGraphicsContext.getTransform(state.gc)
-      saved_state = Map.drop(state, [:gc, :saved]) |> Map.put(:transform, transform)
+      saved_state = Map.drop(state, [:gc, :saved, :path]) |> Map.put(:transform, transform)
       %{state | saved: [saved_state | state.saved]}
     end
 
@@ -896,7 +911,11 @@ defmodule Easel.WX do
           line_join: :wxJOIN_MITER,
           font_size: 10,
           font_face: ~c"sans-serif",
+          font_style: :wxFONTSTYLE_NORMAL,
+          font_weight: :wxFONTWEIGHT_NORMAL,
           global_alpha: 1.0,
+          text_align: :start,
+          text_baseline: :alphabetic,
           saved: [],
           line_dash: []
       }
@@ -1093,7 +1112,6 @@ defmodule Easel.WX do
     end
 
     defp execute_op(["ellipse", args], state) do
-      state = ensure_path(state)
       [cx, cy, rx, ry, rotation, start_angle, end_angle | _rest] = args
 
       tau = 2 * :math.pi()
@@ -1105,6 +1123,8 @@ defmodule Easel.WX do
             "ellipse with rotation or partial arc (rotation=#{rotation}, " <>
               "start=#{start_angle}, end=#{end_angle})"
       end
+
+      state = ensure_path(state)
 
       :wxGraphicsPath.addEllipse(
         state.path,
@@ -1176,7 +1196,6 @@ defmodule Easel.WX do
 
     defp execute_op(["fillText", [text, x, y | _rest]], state) do
       apply_font(state)
-      apply_brush(state)
       {dx, dy} = text_offset(state, text)
 
       :wxGraphicsContext.drawText(
@@ -1255,7 +1274,7 @@ defmodule Easel.WX do
     end
 
     defp set_property("lineWidth", value, state) do
-      %{state | line_width: to_float(value)}
+      %{state | line_width: max(to_float(value), 0.0)}
     end
 
     defp set_property("lineCap", value, state) do
@@ -1282,8 +1301,8 @@ defmodule Easel.WX do
       %{state | line_join: join}
     end
 
-    defp set_property("miterLimit", value, state) do
-      %{state | miter_limit: to_float(value)}
+    defp set_property("miterLimit", _value, _state) do
+      raise UnsupportedOpError, op: "set miterLimit"
     end
 
     defp set_property("font", value, state) when is_binary(value) do
@@ -1292,7 +1311,7 @@ defmodule Easel.WX do
     end
 
     defp set_property("globalAlpha", value, state) do
-      %{state | global_alpha: to_float(value)}
+      %{state | global_alpha: clamp(to_float(value), 0.0, 1.0)}
     end
 
     defp set_property("textAlign", value, state) do
@@ -1366,7 +1385,6 @@ defmodule Easel.WX do
         text_align: :start,
         text_baseline: :alphabetic,
         saved: [],
-        miter_limit: 10.0,
         line_dash: []
       }
     end
@@ -1402,7 +1420,11 @@ defmodule Easel.WX do
     end
 
     defp apply_font(state, color \\ nil) do
-      wx_color = tuple_to_wx_colour(color || state.fill_style)
+      wx_color =
+        color
+        |> Kernel.||(state.fill_style)
+        |> apply_alpha(state.global_alpha)
+        |> tuple_to_wx_colour()
 
       font =
         :wxFont.new(
@@ -1418,14 +1440,29 @@ defmodule Easel.WX do
     end
 
     defp apply_alpha({r, g, b, a}, global_alpha) do
-      {r, g, b, round(a * global_alpha)}
+      alpha = round(a * clamp(global_alpha, 0.0, 1.0)) |> clamp(0, 255)
+      {clamp(r, 0, 255), clamp(g, 0, 255), clamp(b, 0, 255), alpha}
     end
 
-    defp tuple_to_wx_colour({r, g, b, _a}), do: {r, g, b}
+    defp tuple_to_wx_colour({r, g, b, a}), do: {r, g, b, a}
 
     defp to_float(n) when is_float(n), do: n
     defp to_float(n) when is_integer(n), do: n * 1.0
-    defp to_float(n) when is_binary(n), do: String.to_float(n)
+
+    defp to_float(n) when is_binary(n) do
+      n = String.trim(n)
+
+      case Float.parse(n) do
+        {f, ""} ->
+          f
+
+        _ ->
+          case Integer.parse(n) do
+            {i, ""} -> i * 1.0
+            _ -> raise ArgumentError, "invalid numeric value: #{inspect(n)}"
+          end
+      end
+    end
   else
     # wx not available — define stubs that raise at runtime
 
