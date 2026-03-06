@@ -104,7 +104,7 @@ defmodule Easel.Terminal do
         term = draw_frame(term, frame)
 
         if Keyword.get(opts, :wait, true) do
-          wait_for_quit(term, opts)
+          wait_for_quit(term, canvas, opts)
         else
           :ok
         end
@@ -204,14 +204,17 @@ defmodule Easel.Terminal do
       end
     end
 
-    defp wait_for_quit(term, opts) do
+    defp wait_for_quit(term, canvas, opts) do
       case t_poll_event(term, 50) do
         :timeout ->
-          wait_for_quit(term, opts)
+          wait_for_quit(term, canvas, opts)
 
         {:signal, :winch} ->
-          term = t_resize(term)
-          wait_for_quit(term, opts)
+          term = refresh_terminal_size(term, opts)
+          {term, cols, rows} = terminal_grid(term, opts)
+          frame = canvas_to_frame(canvas, cols, rows, nil, nil, opts)
+          term = draw_frame(term, frame)
+          wait_for_quit(term, canvas, opts)
 
         {:data, data} ->
           key_event = key_event_from_data(data)
@@ -220,11 +223,11 @@ defmodule Easel.Terminal do
           if quit_key?(key_event) do
             :ok
           else
-            wait_for_quit(term, opts)
+            wait_for_quit(term, canvas, opts)
           end
 
         _other ->
-          wait_for_quit(term, opts)
+          wait_for_quit(term, canvas, opts)
       end
     end
 
