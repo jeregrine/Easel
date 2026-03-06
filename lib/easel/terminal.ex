@@ -668,10 +668,9 @@ defmodule Easel.Terminal do
     samples = normalize_positive_int(Keyword.get(opts, :samples, 2), 2)
     contrast_profile = contrast_profile(opts, color_mode)
 
-    {draw_cols, draw_rows, off_x, off_y} =
-      fit_bounds(width, height, columns, rows, cell_aspect, fit)
+    geometry = fit_geometry(width, height, columns, rows, cell_aspect, fit)
 
-    sample_maps = luma_sample_maps(width, height, draw_cols, draw_rows, samples)
+    sample_maps = luma_sample_maps(geometry, width, height, samples)
 
     render_opts = %{
       columns: columns,
@@ -680,10 +679,10 @@ defmodule Easel.Terminal do
       chars: chars,
       invert?: invert?,
       color_mode: color_mode,
-      draw_cols: draw_cols,
-      draw_rows: draw_rows,
-      off_x: off_x,
-      off_y: off_y,
+      draw_cols: geometry.draw_cols,
+      draw_rows: geometry.draw_rows,
+      off_x: geometry.off_x,
+      off_y: geometry.off_y,
       contrast_profile: contrast_profile,
       sample_maps: sample_maps
     }
@@ -707,20 +706,19 @@ defmodule Easel.Terminal do
 
     contrast_profile = contrast_profile(opts, color_mode)
 
-    {draw_cols, draw_rows, off_x, off_y} =
-      fit_bounds(width, height, columns, rows, cell_aspect, fit)
+    geometry = fit_geometry(width, height, columns, rows, cell_aspect, fit)
 
-    sample_maps = braille_sample_maps(width, height, draw_cols, draw_rows)
+    sample_maps = braille_sample_maps(geometry, width, height)
 
     render_opts = %{
       columns: columns,
       src_w: width,
       rgb: rgb,
       color_mode: color_mode,
-      draw_cols: draw_cols,
-      draw_rows: draw_rows,
-      off_x: off_x,
-      off_y: off_y,
+      draw_cols: geometry.draw_cols,
+      draw_rows: geometry.draw_rows,
+      off_x: geometry.off_x,
+      off_y: geometry.off_y,
       bg_threshold: bg_threshold,
       contrast_profile: contrast_profile,
       sample_maps: sample_maps
@@ -750,20 +748,19 @@ defmodule Easel.Terminal do
     mask_cache = silhouette_mask_cache(opts, glyph_profile)
     contrast_profile = contrast_profile(opts, color_mode)
 
-    {draw_cols, draw_rows, off_x, off_y} =
-      fit_bounds(width, height, columns, rows, cell_aspect, fit)
+    geometry = fit_geometry(width, height, columns, rows, cell_aspect, fit)
 
-    sample_maps = silhouette_sample_maps(width, height, draw_cols, draw_rows, glyph_w, glyph_h)
+    sample_maps = silhouette_sample_maps(geometry, width, height, glyph_w, glyph_h)
 
     render_opts = %{
       columns: columns,
       src_w: width,
       rgb: rgb,
       color_mode: color_mode,
-      draw_cols: draw_cols,
-      draw_rows: draw_rows,
-      off_x: off_x,
-      off_y: off_y,
+      draw_cols: geometry.draw_cols,
+      draw_rows: geometry.draw_rows,
+      off_x: geometry.off_x,
+      off_y: geometry.off_y,
       glyph_w: glyph_w,
       glyph_h: glyph_h,
       bg_threshold: bg_threshold,
@@ -825,18 +822,24 @@ defmodule Easel.Terminal do
     :ok
   end
 
-  defp luma_sample_maps(src_w, src_h, draw_cols, draw_rows, samples) do
-    x_map = sample_axis_map(src_w, draw_cols, samples)
-    y_map = sample_axis_map(src_h, draw_rows, samples)
+  defp luma_sample_maps(geometry, src_w, src_h, samples) do
+    x_map = sample_axis_map(geometry.src_x0, geometry.src_x1, src_w, geometry.draw_cols, samples)
+    y_map = sample_axis_map(geometry.src_y0, geometry.src_y1, src_h, geometry.draw_rows, samples)
     %{x: x_map, y: y_map}
   end
 
-  defp braille_sample_maps(src_w, src_h, draw_cols, draw_rows) do
-    %{x: sample_axis_map(src_w, draw_cols, 2), y: sample_axis_map(src_h, draw_rows, 4)}
+  defp braille_sample_maps(geometry, src_w, src_h) do
+    %{
+      x: sample_axis_map(geometry.src_x0, geometry.src_x1, src_w, geometry.draw_cols, 2),
+      y: sample_axis_map(geometry.src_y0, geometry.src_y1, src_h, geometry.draw_rows, 4)
+    }
   end
 
-  defp silhouette_sample_maps(src_w, src_h, draw_cols, draw_rows, glyph_w, glyph_h) do
-    key = {src_w, src_h, draw_cols, draw_rows, glyph_w, glyph_h}
+  defp silhouette_sample_maps(geometry, src_w, src_h, glyph_w, glyph_h) do
+    key =
+      {geometry.src_x0, geometry.src_x1, geometry.src_y0, geometry.src_y1, geometry.draw_cols,
+       geometry.draw_rows, glyph_w, glyph_h}
+
     table = ensure_sample_map_cache_table()
 
     case :ets.lookup(table, key) do
@@ -845,8 +848,9 @@ defmodule Easel.Terminal do
 
       [] ->
         sample_maps = %{
-          x: sample_axis_map(src_w, draw_cols, glyph_w),
-          y: sample_axis_map(src_h, draw_rows, glyph_h)
+          x:
+            sample_axis_map(geometry.src_x0, geometry.src_x1, src_w, geometry.draw_cols, glyph_w),
+          y: sample_axis_map(geometry.src_y0, geometry.src_y1, src_h, geometry.draw_rows, glyph_h)
         }
 
         true = :ets.insert(table, {key, sample_maps})
@@ -855,25 +859,56 @@ defmodule Easel.Terminal do
     end
   end
 
-  defp sample_axis_map(src_size, draw_size, sample_count) do
+  defp sample_axis_map(src_start, src_end, src_limit, draw_size, sample_count) do
     for idx <- 0..(draw_size - 1) do
-      start_pos = idx * src_size / draw_size
-      end_pos = (idx + 1) * src_size / draw_size
+      start_pos = src_start + idx / draw_size * (src_end - src_start)
+      end_pos = src_start + (idx + 1) / draw_size * (src_end - src_start)
 
       for sample_idx <- 0..(sample_count - 1) do
         pos = start_pos + (sample_idx + 0.5) / sample_count * (end_pos - start_pos)
-        pos |> trunc() |> max(0) |> min(src_size - 1)
+        pos |> trunc() |> max(0) |> min(src_limit - 1)
       end
       |> List.to_tuple()
     end
     |> List.to_tuple()
   end
 
-  defp fit_bounds(_src_w, _src_h, cols, rows, _cell_aspect, :fill) do
-    {cols, rows, 0, 0}
+  defp fit_geometry(src_w, src_h, cols, rows, cell_aspect, :fill) do
+    src_aspect = src_w / src_h
+    out_aspect = cols / max(rows * cell_aspect, 0.0001)
+
+    if src_aspect >= out_aspect do
+      crop_w = src_h * out_aspect
+      src_x0 = (src_w - crop_w) / 2
+
+      %{
+        draw_cols: cols,
+        draw_rows: rows,
+        off_x: 0,
+        off_y: 0,
+        src_x0: src_x0,
+        src_x1: src_x0 + crop_w,
+        src_y0: 0.0,
+        src_y1: src_h * 1.0
+      }
+    else
+      crop_h = src_w / out_aspect
+      src_y0 = (src_h - crop_h) / 2
+
+      %{
+        draw_cols: cols,
+        draw_rows: rows,
+        off_x: 0,
+        off_y: 0,
+        src_x0: 0.0,
+        src_x1: src_w * 1.0,
+        src_y0: src_y0,
+        src_y1: src_y0 + crop_h
+      }
+    end
   end
 
-  defp fit_bounds(src_w, src_h, cols, rows, cell_aspect, _fit) do
+  defp fit_geometry(src_w, src_h, cols, rows, cell_aspect, _fit) do
     src_aspect = src_w / src_h
     out_aspect = cols / max(rows * cell_aspect, 0.0001)
 
@@ -888,9 +923,16 @@ defmodule Easel.Terminal do
         {min(draw_cols, cols), draw_rows}
       end
 
-    off_x = div(cols - draw_cols, 2)
-    off_y = div(rows - draw_rows, 2)
-    {draw_cols, draw_rows, off_x, off_y}
+    %{
+      draw_cols: draw_cols,
+      draw_rows: draw_rows,
+      off_x: div(cols - draw_cols, 2),
+      off_y: div(rows - draw_rows, 2),
+      src_x0: 0.0,
+      src_x1: src_w * 1.0,
+      src_y0: 0.0,
+      src_y1: src_h * 1.0
+    }
   end
 
   defp render_line(row, opts) do

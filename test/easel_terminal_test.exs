@@ -27,6 +27,15 @@ defmodule EaselTerminalTest do
       assert frame == "@@\n  "
     end
 
+    test "fill fit crops instead of stretching" do
+      image = %{width: 4, height: 1, rgb: <<0, 0, 0, 255, 255, 255, 255, 255, 255, 0, 0, 0>>}
+
+      frame =
+        Easel.Terminal.frame_from_rgb(image, 2, 2, charset: " @", fit: :fill, cell_aspect: 1.0)
+
+      assert frame == "@@\n@@"
+    end
+
     test "ansi256 mode emits color escapes" do
       image = %{width: 1, height: 1, rgb: <<255, 0, 0>>}
 
