@@ -20,6 +20,7 @@ defmodule Easel.Terminal do
   @default_light_max_luma 0.72
   @glyph_profile_cache_table :easel_terminal_glyph_profile_cache
   @glyph_profile_cache_limit 128
+  @sample_map_cache_limit 64
 
   @termite_available Code.ensure_loaded?(Module.concat([Termite, Terminal])) and
                        Code.ensure_loaded?(Module.concat([Termite, Screen]))
@@ -367,6 +368,7 @@ defmodule Easel.Terminal do
 
         stop_terminal(term)
         teardown_char_mask_cache()
+        teardown_sample_map_cache()
         teardown_wx_raster_env(wx_env_created?)
       end
     end
@@ -535,6 +537,21 @@ defmodule Easel.Terminal do
 
     defp teardown_char_mask_cache do
       key = {__MODULE__, :char_mask_cache_table}
+
+      case Process.get(key) do
+        tid when is_reference(tid) ->
+          :ets.delete(tid)
+          Process.delete(key)
+
+        _ ->
+          :ok
+      end
+    rescue
+      _ -> :ok
+    end
+
+    defp teardown_sample_map_cache do
+      key = {__MODULE__, :sample_map_cache_table}
 
       case Process.get(key) do
         tid when is_reference(tid) ->
@@ -786,6 +803,28 @@ defmodule Easel.Terminal do
     end
   end
 
+  defp ensure_sample_map_cache_table do
+    key = {__MODULE__, :sample_map_cache_table}
+
+    case Process.get(key) do
+      tid when is_reference(tid) ->
+        tid
+
+      _ ->
+        tid = :ets.new(:easel_terminal_sample_map_cache, [:set, :private, read_concurrency: true])
+        Process.put(key, tid)
+        tid
+    end
+  end
+
+  defp maybe_trim_sample_map_cache(table) do
+    if :ets.info(table, :size) > @sample_map_cache_limit do
+      prune_ets_table(table, trunc(@sample_map_cache_limit / 4))
+    end
+
+    :ok
+  end
+
   defp luma_sample_maps(src_w, src_h, draw_cols, draw_rows, samples) do
     x_map = sample_axis_map(src_w, draw_cols, samples)
     y_map = sample_axis_map(src_h, draw_rows, samples)
@@ -797,33 +836,23 @@ defmodule Easel.Terminal do
   end
 
   defp silhouette_sample_maps(src_w, src_h, draw_cols, draw_rows, glyph_w, glyph_h) do
-    x_map =
-      for col <- 0..(draw_cols - 1) do
-        x0 = col * src_w / draw_cols
-        x1 = (col + 1) * src_w / draw_cols
+    key = {src_w, src_h, draw_cols, draw_rows, glyph_w, glyph_h}
+    table = ensure_sample_map_cache_table()
 
-        for gx <- 0..(glyph_w - 1) do
-          x = x0 + (gx + 0.5) / glyph_w * (x1 - x0)
-          x |> trunc() |> max(0) |> min(src_w - 1)
-        end
-        |> List.to_tuple()
-      end
-      |> List.to_tuple()
+    case :ets.lookup(table, key) do
+      [{^key, sample_maps}] ->
+        sample_maps
 
-    y_map =
-      for row <- 0..(draw_rows - 1) do
-        y0 = row * src_h / draw_rows
-        y1 = (row + 1) * src_h / draw_rows
+      [] ->
+        sample_maps = %{
+          x: sample_axis_map(src_w, draw_cols, glyph_w),
+          y: sample_axis_map(src_h, draw_rows, glyph_h)
+        }
 
-        for gy <- 0..(glyph_h - 1) do
-          y = y0 + (gy + 0.5) / glyph_h * (y1 - y0)
-          y |> trunc() |> max(0) |> min(src_h - 1)
-        end
-        |> List.to_tuple()
-      end
-      |> List.to_tuple()
-
-    %{x: x_map, y: y_map}
+        true = :ets.insert(table, {key, sample_maps})
+        maybe_trim_sample_map_cache(table)
+        sample_maps
+    end
   end
 
   defp sample_axis_map(src_size, draw_size, sample_count) do
@@ -1575,6 +1604,21 @@ defmodule Easel.Terminal do
   end
 
   defp wx_const(atom), do: :wxe_util.get_const(atom)
+
+  defp prune_ets_table(_table, count) when count <= 0, do: :ok
+
+  defp prune_ets_table(table, count) do
+    prune_ets_table(table, :ets.first(table), count)
+  end
+
+  defp prune_ets_table(_table, :"$end_of_table", _count), do: :ok
+  defp prune_ets_table(_table, _key, count) when count <= 0, do: :ok
+
+  defp prune_ets_table(table, key, count) do
+    next_key = :ets.next(table, key)
+    true = :ets.delete(table, key)
+    prune_ets_table(table, next_key, count - 1)
+  end
 
   defp reduce_set_bits(mask, acc, fun), do: reduce_set_bits(mask, 0, acc, fun)
 
